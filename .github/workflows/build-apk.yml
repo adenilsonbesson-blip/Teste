@@ -1,0 +1,93 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Android SDK & Licenses
+        run: |
+          echo "=== Aceitando licenças do Android SDK ==="
+          mkdir -p "$ANDROID_HOME/licenses"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+
+          echo "=== Instalando Android SDK Platform 36 e Build-Tools ==="
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" || true
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Prepare Keystore and Environment Files
+        run: |
+          echo "=== Configurando .env ==="
+          if [ ! -f .env ]; then
+            if [ -f .env.example ]; then
+              cp .env.example .env
+            else
+              touch .env
+            fi
+          fi
+
+          echo "=== Configurando debug.keystore com Chave Permanente Fixa ==="
+          if [ -f debug.keystore ] && [ -s debug.keystore ]; then
+            echo "debug.keystore ja existe."
+          elif [ -f debug.keystore.base64 ] && [ -s debug.keystore.base64 ]; then
+            echo "Decodificando debug.keystore.base64 do repositorio..."
+            base64 -d -i debug.keystore.base64 > debug.keystore
+          else
+            echo "Restaurando keystore original fixa para manter compatibilidade de atualizacao sem desinstalar..."
+            cat << 'EOF' | tr -d '\r\n ' | base64 -d > debug.keystore
+MIIKZgIBAzCCChAGCSqGSIb3DQEHAaCCCgEEggn9MIIJ+TCCBcAGCSqGSIb3DQEHAaCCBbEEggWtMIIFqTCCBaUGCyqGSIb3DQEMCgECoIIFQDCCBTwwZgYJKoZIhvcNAQUNMFkwOAYJKoZIhvcNAQUMMCsEFADL6tEy0qbWTAUmyIC+GC8mHWJkAgInEAIBIDAMBggqhkiG9w0CCQUAMB0GCWCGSAFlAwQBKgQQ5Q9d6sSAFqANoStbSJddpQSCBND91ORb/7te7tAr7uewTBx7L8C7ESkci9nadyACcQwlxDTqqiCJjhKHrDtWYUMWgeq2NtOBP7ipoasDNeGjO94UGHjqpPecjZP2eSz6aKDZQh+r+QePWbosGbOZizrEfWre6pGi/1U7KwsxMxknogB9OB760h2nWPzyR+sirLd+rk0IS7PVFi/l9HR8rHrxKwOiyKWosaQI/EjXenWFZM4ZA8DvncU//+7Tmqc2qPy4dd3zryw9wtLFMZp4qpmx9x38gXl6uvI9+45jviGcSYbdNX79ycwrNY4tP1Yo5KstWuFjI1sQx77aF+iMKsg7MQrb3woinlFgq4CVFscrqkiE9tzBZh0RHW9Ojh6EA0m+LIy9yr1g4/ZP2XsKQKn8Phvf6OG3NBHlW0Q7FSvRi/eQIpPsVor4mrmtyHWsI5QEX9jfT/f8yJPVwpCRe5Gig9D1DDMWFaK6cZ34TlJW3FBUCCdXiu8S92xPE5jFl+kJLz+J0KYgJVJXrUhcW0FykMbYZ57COvsCxUgmm5iD75k/hdulObfQzYw/N8zFnjQZ/vLhsFbHFzD/OytMvpZ/JhqjiWpIzr7s+yIO8li2zwiqZLI4byx3uCB/YMqEhMCcUa5F0EnVJFI9Ltknn5jgQDGf889MZFlBi4N0DPFIfMfe/ZTwKbf31O5omLV9I4Z4hSfRl+SZYREqU5xMscOEfnAYRgPP+nQVl+PEtJzmlnUTnHWvPTma5MY5UuJstVgNKjg5HOqVUVxABXACq4a9FmPRSS/kxaG9HCmn3DCJhbs94rrxq+64KuP5VTw4VTK92hbsHZvbpJGfN9U1dmMQqfaaS2Hlb3kj1gVukIgo+qOAwBMxw6N0VfhiIiSQvot4eG51p5Pdt0huY0vLqXkPvakcidftBZ76ljBcLWrDN+PV5a3aJVcugkJVz36549Gihx3BWxN3o2whiz1jH+TOhYZf3ffZaqLrvVQrXci56ItZcEECV4TaYpYmZMb8tjhSIkRSQ0r1P3K1hfeOjkc4CwtIyUnWa8fvHsaZU5Mqgq4+u256WIEx0MWp0/+t/o4vLIhMzG22gE96Hs50UTZzMkSEwYZU0eMD7hwL9Kl5iE8vFSfAb1kmdY1m6vNNT/sDoiRXm1okA949Y+C1qhnynRdBYUH+FrMQlob0Ut5eLUa8V+EAT3zoykXveHKKXQqp2OnOHuoZaUQbaWxirPXKJhP8xdwyqhNcHzUD54TKyLF7zXeVhqDXNZzPvrnGzqi1WvXGJ/zDDjPiafG7PnUEMLkS8LZxS49GEO1l6R1bXMKfeemFsg3XJ4GFRyyB20dhU/bpVMzy0wiSDjDOPJKA7ySoPy2GV2TILX7s1whJKdR+muJPVrvmKIBUhGNy7q7OgxDWnaO86A24pPclijVv3eSNCdtC8ZwFevas45snsba54PcUnzU79YKXnnz+UwN85IgdISNoft31KEHv3z+J+tnXwmp3P7S//goNiP2YDeWr9DG21eDztKBfCXOJsAgrOyoDbhZkWEVkI+4Ev6+GlTCSBmrMciXoX8QKP22u5c2VYW0OGzk9wYm2hP0wOlpsjvdpqZPVnzZg7IySbnrCAj4lS3pCIl086GhAK1saDs+yDtbxdRmc6HMeR3VbuwCMBTFSMC0GCSqGSIb3DQEJFDEgHh4AYQBuAGQAcgBvAGkAZABkAGUAYgB1AGcAawBlAHkwIQYJKoZIhvcNAQkVMRQEElRpbWUgMTc4MDU4NzA1NDM0MjCCBDEGCSqGSIb3DQEHBqCCBCIwggQeAgEAMIIEFwYJKoZIhvcNAQcBMGYGCSqGSIb3DQEFDTBZMDgGCSqGSIb3DQEFDDArBBQiFkEYiPTCgteWxxrploJS0qTLwAICJxACASAwDAYIKoZIhvcNAgkFADAdBglghkgBZQMEASoEEOInonbgK+zv4LzMX4k7C2OAggOgzX692NntMd3RhowOrL/zqGCtB3bU/dvCYE8XiEewZqZwUiShTOzUf/8Fgd56XGOMN4PgarHlQJUC5Z5eXPsHqqRyhKGYdpaNTu9zZMZp9DZpblGteMeNp6nmaRcm2gDGwxdwt4ZL7BCkz/8Hh7lmjVVCspENBg3+gXLgGGmOwYj4W3XAuZjg1RT1nVn+oNR5riQ3aF+4GI4UGPCL120MyH9FLDokD6UNNXABYufa0j+S19hUMmM0BIB2wKacleUPfMU7t+mrW8+e3arj9xgQ2iiuldiR1rAUcrYpNRxXdR4kXe7neRxHhN11MR7LSIW5Fta4/KiaNU4lkTASYIDSiUOaDoymQzBg3Aa5x7f3LeRCSlojfAeznzWAHYx+TSaGKjq322jrJMGbAykHLXZ4jqZHpOIjfE3xHY4hU37bcJ/FQu9PNeljD28vRlRb4xxNpxWf8O6w/LxViqcSfAjESkQFDGsTWifsYMnKsCYdrr7i5yAxJIGvwXbU/bLvyIWo/5xHtlXLjx+YMn7ElWBJ8jy+U2v5dIla9R3OIVYy7B8huG32HvrYhUJFSXFl0J24LyjrmKDk/SzaiOLrJp/qDuPF2vrbBZOCMIQp+fCSZe/KOgLVSNRA21dTXsOkuMfFqvQweGKuihNWki9jQfj+/O590sGF73QOd/o7E2p6QlILCP2cUDoJnHejGbz+cUM2ptL91Kx7YBioNqtbxmS+50D+8RRN5PAA41sK+GvCahCv+6m1wAgBjbjpB4kHFMmd07d3djIrwB89PPmG7aYnHuqsoIdt9upowkm1DEhCTC27/oObRa4zRdC1GshEFIGWIUb1mUjXwCAwMlvPoecsUmOtGlJDEwtUlw/MNkImR4CJ2ikwdTQ5sliG118ze8d9BtDDnkcv1nKXLgt9rCF8PawNKjD8y5RjyWcFv/YlOygyHbxeI31WL14kvFXtmGK/jYC6pwt0Pnz2k17Dv96HHBTxixbT/Ibqpkas+FGf9C4nqwVnvUQTGVrJwpIu76NcHaNwnHHFJ09tj9+LEw9PuCkv35SNyROe4hoZRmwVDNvisAxYn3aKLsa8Wq2Hahxa4pKDN9JCffsVKutoghBu2FiH3qMGTBCj6Yuc+K1+baUACYjgwA2yIhsxHJLNHnRn2A2RGPzFZaDpnY1iePO8f9urflnmfCttwQYApJwaS3otaySYyAeAjXnlEMJhv1lpqc6BsKGVCx5Fq3Z48PJbYjBNMDEwDQYJYIZIAWUDBAIBBQAEINPCNXdN1jeWJTSwLww/j5APbdAxwjq2vOnhZzxBSypcBBRqQ8jjmmODNrYdWXvrLbW3sWQHfAICJxA=
+EOF
+          fi
+          ls -la debug.keystore
+
+      - name: Build APKs with Gradle
+        run: |
+          gradle wrapper --gradle-version 9.3.1 || true
+          chmod +x gradlew || true
+
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleDebug assembleRelease --stacktrace
+          else
+            gradle assembleDebug assembleRelease --stacktrace
+          fi
+
+      - name: Verify Generated APKs
+        run: |
+          echo "=== Listando APKs gerados com sucesso ==="
+          ls -la app/build/outputs/apk/debug/ || true
+          ls -la app/build/outputs/apk/release/ || true
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
