@@ -5,9 +5,14 @@ import com.example.data.SiceDatabase
 import com.example.data.SiceRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import java.io.File
 
 class SiceApplication : Application() {
     val applicationScope = CoroutineScope(SupervisorJob())
+
+    companion object {
+        var shouldPromptForDataCleanup = false
+    }
 
     lateinit var database: SiceDatabase
         private set
@@ -19,6 +24,17 @@ class SiceApplication : Application() {
         
         // Search and clean vestigial temporary files from uninstalled versions while preserving active database
         cleanLegacyTracesAndSanitizeStorage(this)
+        
+        // Detect old data for first launch prompt
+        val hasDb = getDatabasePath("entregas.db").exists()
+        val hasJson = File(filesDir, "entregas_backup_v16.json").exists()
+        if (hasDb || hasJson) {
+            val prefs = getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+            if (!prefs.getBoolean("is_not_first_run", false)) {
+                shouldPromptForDataCleanup = true
+                prefs.edit().putBoolean("is_not_first_run", true).apply()
+            }
+        }
 
         database = SiceDatabase.getDatabase(this, applicationScope)
         repository = SiceRepository(database.siceDao())
@@ -78,6 +94,21 @@ fun cleanLegacyTracesAndSanitizeStorage(context: android.content.Context) {
                     if (file.isFile && (now - file.lastModified() > dayInMs) && !file.name.contains("entregas")) {
                         file.delete()
                     }
+                }
+            }
+        }
+
+        // 3. Ensure WebView code cache directories exist
+        val baseDirs = listOfNotNull(context.cacheDir, context.codeCacheDir)
+        for (base in baseDirs) {
+            val codeCacheTargets = listOf(
+                "WebView/Default/Code Cache/js",
+                "WebView/Default/Code Cache/wasm"
+            )
+            for (relPath in codeCacheTargets) {
+                val dir = java.io.File(base, relPath)
+                if (!dir.exists()) {
+                    dir.mkdirs()
                 }
             }
         }
