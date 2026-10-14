@@ -1,0 +1,76 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Prepare Keystore and Environment Files
+        run: |
+          echo "=== Configurando .env ==="
+          if [ ! -f .env ]; then
+            if [ -f .env.example ]; then
+              cp .env.example .env
+            else
+              touch .env
+            fi
+          fi
+          echo "=== Gerando debug.keystore via keytool ==="
+          if [ ! -f debug.keystore ] || [ ! -s debug.keystore ]; then
+            keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -keypass android -storepass android -validity 10000 -keyalg RSA -keysize 2048 -dname "CN=Android Debug,O=Android,C=US" || true
+          fi
+          ls -la debug.keystore
+
+      - name: Build APKs with Gradle
+        run: |
+          chmod +x gradlew || true
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleDebug assembleRelease --stacktrace
+          else
+            gradle assembleDebug assembleRelease --stacktrace
+          fi
+
+      - name: Verify Generated APKs
+        run: |
+          echo "=== Listando APKs gerados com sucesso ==="
+          ls -la app/build/outputs/apk/debug/ || true
+          ls -la app/build/outputs/apk/release/ || true
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error

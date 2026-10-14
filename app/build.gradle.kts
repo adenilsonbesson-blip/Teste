@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
@@ -14,33 +16,28 @@ android {
     applicationId = "com.sice.condominio.appv2"
     minSdk = 24
     targetSdk = 36
-    versionCode = 38
-    versionName = "3.8"
+    versionCode = 42
+    versionName = "4.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
   signingConfigs {
     create("siceSigningConfig") {
-      val permanentKs = file("${rootDir}/sice-app-key.jks")
       val debugKs = file("${rootDir}/debug.keystore")
-      if (permanentKs.exists()) {
-        storeFile = permanentKs
-        storePassword = "sice2026pass"
-        keyAlias = "sicekey"
-        keyPassword = "sice2026pass"
-      } else if (debugKs.exists()) {
-        storeFile = debugKs
-        storePassword = "android"
-        keyAlias = "androiddebugkey"
-        keyPassword = "android"
-      } else {
-        val userHomeKs = file("${System.getProperty("user.home")}/.android/debug.keystore")
-        storeFile = if (userHomeKs.exists()) userHomeKs else debugKs
-        storePassword = "android"
-        keyAlias = "androiddebugkey"
-        keyPassword = "android"
+      val base64Ks = file("${rootDir}/debug.keystore.base64")
+      if ((!debugKs.exists() || debugKs.length() == 0L) && base64Ks.exists()) {
+        try {
+          val decoded = Base64.getMimeDecoder().decode(base64Ks.readText().trim())
+          debugKs.writeBytes(decoded)
+        } catch (e: Exception) {
+          println("Warning: could not restore debug.keystore from base64: ${e.message}")
+        }
       }
+      storeFile = debugKs
+      storePassword = "android"
+      keyAlias = "androiddebugkey"
+      keyPassword = "android"
       enableV1Signing = true
       enableV2Signing = true
       enableV3Signing = true
