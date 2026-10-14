@@ -81,21 +81,6 @@ fun cleanLegacyTracesAndSanitizeStorage(context: android.content.Context) {
                 }
             }
         }
-
-        // 3. Ensure WebView code cache directories exist
-        val baseDirs = listOfNotNull(context.cacheDir, context.codeCacheDir)
-        for (base in baseDirs) {
-            val codeCacheTargets = listOf(
-                "WebView/Default/Code Cache/js",
-                "WebView/Default/Code Cache/wasm"
-            )
-            for (relPath in codeCacheTargets) {
-                val dir = java.io.File(base, relPath)
-                if (!dir.exists()) {
-                    dir.mkdirs()
-                }
-            }
-        }
     } catch (e: Exception) {
         e.printStackTrace()
     }

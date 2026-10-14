@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.print.PrintAttributes
 import android.print.PrintManager
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.*
 import android.widget.Toast
@@ -169,14 +170,45 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+fun shouldForceSoftwareRendering(): Boolean {
+    val isEmulator = android.os.Build.FINGERPRINT.startsWith("generic")
+            || android.os.Build.FINGERPRINT.startsWith("unknown")
+            || android.os.Build.MODEL.contains("google_sdk")
+            || android.os.Build.MODEL.contains("Emulator")
+            || android.os.Build.MODEL.contains("Android SDK built for x86")
+            || android.os.Build.MANUFACTURER.contains("Genymotion")
+            || (android.os.Build.BRAND.startsWith("generic") && android.os.Build.DEVICE.startsWith("generic"))
+            || android.os.Build.PRODUCT.contains("google_sdk")
+            || android.os.Build.HARDWARE.contains("goldfish")
+            || android.os.Build.HARDWARE.contains("ranchu")
+            || android.os.Build.HARDWARE.contains("vbox86")
+
+    val hasDri = try {
+        val driDir = java.io.File("/dev/dri")
+        driDir.exists() && (driDir.listFiles()?.isNotEmpty() == true)
+    } catch (e: Exception) {
+        false
+    }
+
+    val hasPhysicalMobileGpu = java.io.File("/dev/kgsl-3d0").exists() 
+            || java.io.File("/dev/mali0").exists() 
+            || java.io.File("/dev/pvr").exists() 
+            || java.io.File("/dev/nvhost-as-gpu").exists()
+
+    return isEmulator || (!hasDri && !hasPhysicalMobileGpu)
+}
+
 @SuppressLint("SetJavaScriptEnabled")
 @Suppress("DEPRECATION")
 @Composable
 fun SiceWebViewContainer() {
+    var reloadKey by remember { mutableStateOf(0) }
     var showNativeStartup by remember { mutableStateOf(true) }
     
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(350)
+    // Safety fallback timeout to keep startup screen visible until WebView notifies ready or reloads
+    LaunchedEffect(reloadKey) {
+        showNativeStartup = true
+        kotlinx.coroutines.delay(3500)
         showNativeStartup = false
     }
 
@@ -186,7 +218,6 @@ fun SiceWebViewContainer() {
     var isScanning by remember { mutableStateOf(false) }
     var scanTarget by remember { mutableStateOf("entrada") }
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
-    var reloadKey by remember { mutableStateOf(0) }
     
     // Back navigation handling
     BackHandler(enabled = true) {
@@ -218,10 +249,15 @@ fun SiceWebViewContainer() {
                 }
                 Lifecycle.Event.ON_DESTROY -> {
                     try {
-                        webViewInstance?.destroy()
+                        webViewInstance?.let { wv ->
+                            val parent = wv.parent as? ViewGroup
+                            parent?.removeView(wv)
+                            wv.destroy()
+                        }
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
+                    webViewInstance = null
                 }
                 else -> {}
             }
@@ -229,6 +265,16 @@ fun SiceWebViewContainer() {
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            try {
+                webViewInstance?.let { wv ->
+                    val parent = wv.parent as? ViewGroup
+                    parent?.removeView(wv)
+                    wv.destroy()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            webViewInstance = null
         }
     }
     
@@ -260,8 +306,11 @@ fun SiceWebViewContainer() {
                     // Search and clean vestigial temporary files from uninstalled versions while preserving active database
                     cleanLegacyTracesAndSanitizeStorage(activityContext)
                     
-                    WebView(activityContext).apply {
-                        webViewInstance = this
+                        WebView.setWebContentsDebuggingEnabled(true)
+                        WebView(activityContext).apply {
+                            webViewInstance = this
+                            setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                            setBackgroundColor(android.graphics.Color.WHITE)
                         layoutParams = ViewGroup.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
@@ -444,6 +493,8 @@ fun SiceWebViewContainer() {
                             }
 
                             override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                                val didCrash = detail?.didCrash() ?: false
+                                android.util.Log.e("SiceWebView", "WebView renderer terminated. didCrash=$didCrash")
                                 try {
                                     view?.let { wv ->
                                         val parent = wv.parent as? ViewGroup
@@ -453,6 +504,7 @@ fun SiceWebViewContainer() {
                                 } catch (e: Exception) {
                                     e.printStackTrace()
                                 }
+                                webViewInstance = null
                                 val act = findActivity(context)
                                 act?.runOnUiThread {
                                     reloadKey++
