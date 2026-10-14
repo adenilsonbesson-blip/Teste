@@ -22,13 +22,8 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Set up Android SDK & Licenses
-        run: |
-          echo "=== Aceitando licenças do Android SDK ==="
-          mkdir -p "$ANDROID_HOME/licenses"
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
-          echo "=== Instalando Android SDK Platform 36 e Build-Tools ==="
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" || true
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -61,7 +56,6 @@ EOF
 
       - name: Build APKs with Gradle
         run: |
-          gradle wrapper --gradle-version 9.3.1 || true
           chmod +x gradlew || true
           if [ -f "./gradlew" ]; then
             ./gradlew assembleDebug assembleRelease --stacktrace
