@@ -18,5 +18,7 @@ local.properties
 firebase-applet-config.json
 google-services.json
 *.jks
-!debug.keystore
-!debug.keystore.base64
+!sice-app-key.jks
+*.keystore
+debug.keystore
+debug.keystore.base64
