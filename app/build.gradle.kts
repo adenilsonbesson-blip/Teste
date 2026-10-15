@@ -23,24 +23,10 @@ android {
   signingConfigs {
     create("siceSigningConfig") {
       val permanentKs = file("${rootDir}/sice-app-key.jks")
-      val debugKs = file("${rootDir}/debug.keystore")
-      if (permanentKs.exists()) {
-        storeFile = permanentKs
-        storePassword = "sice2026pass"
-        keyAlias = "sicekey"
-        keyPassword = "sice2026pass"
-      } else if (debugKs.exists()) {
-        storeFile = debugKs
-        storePassword = "android"
-        keyAlias = "androiddebugkey"
-        keyPassword = "android"
-      } else {
-        val userHomeKs = file("${System.getProperty("user.home")}/.android/debug.keystore")
-        storeFile = if (userHomeKs.exists()) userHomeKs else debugKs
-        storePassword = "android"
-        keyAlias = "androiddebugkey"
-        keyPassword = "android"
-      }
+      storeFile = permanentKs
+      storePassword = "sice2026pass"
+      keyAlias = "sicekey"
+      keyPassword = "sice2026pass"
       enableV1Signing = true
       enableV2Signing = true
       enableV3Signing = true
