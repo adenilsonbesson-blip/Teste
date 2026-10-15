@@ -1616,7 +1616,7 @@ class AndroidDBInterface(
 
         // 6. Encomendas
         val currEncomendas = if (result.has("encomendas")) result.getJSONArray("encomendas") else org.json.JSONArray()
-        val encomendaKeys = HashSet<String>()
+        val encomendaMap = HashMap<String, Int>()
         var maxId = 1000
         for (i in 0 until currEncomendas.length()) {
             val enc = currEncomendas.getJSONObject(i)
@@ -1625,12 +1625,12 @@ class AndroidDBInterface(
             val rastreio = enc.optString("rastreio", "").trim().uppercase()
             val bloco = enc.optString("bloco", "").trim().uppercase()
             val apto = enc.optString("apto", "").trim()
-            if (rastreio.isNotEmpty()) {
-                encomendaKeys.add("RASTREIO:${rastreio}|${bloco}|${apto}")
+            val key = if (rastreio.isNotEmpty()) {
+                "RASTREIO:${rastreio}|${bloco}|${apto}"
             } else {
-                val composite = "COMP:${enc.optString("dataEntrada", "")}|${enc.optString("horaEntrada", "")}|${bloco}|${apto}|${enc.optString("morador", "").trim().lowercase()}"
-                encomendaKeys.add(composite)
+                "COMP:${enc.optString("dataEntrada", "")}|${enc.optString("horaEntrada", "")}|${bloco}|${apto}|${enc.optString("morador", "").trim().lowercase()}"
             }
+            encomendaMap[key] = i
         }
         if (incoming.has("encomendas")) {
             val inEncomendas = incoming.getJSONArray("encomendas")
@@ -1645,8 +1645,9 @@ class AndroidDBInterface(
                 } else {
                     "COMP:${enc.optString("dataEntrada", "")}|${enc.optString("horaEntrada", "")}|${bloco}|${apto}|${enc.optString("morador", "").trim().lowercase()}"
                 }
-                if (!encomendaKeys.contains(key)) {
-                    encomendaKeys.add(key)
+                
+                if (!encomendaMap.containsKey(key)) {
+                    encomendaMap[key] = currEncomendas.length()
                     maxId++
                     enc.put("id", maxId)
                     currEncomendas.put(enc)
@@ -1659,7 +1660,21 @@ class AndroidDBInterface(
                         addPlat++
                     }
                 } else {
-                    skipEnc++
+                    val existingIdx = encomendaMap[key]!!
+                    val existingEnc = currEncomendas.getJSONObject(existingIdx)
+                    val existingStatus = existingEnc.optString("status", "Recebido")
+                    val incomingStatus = enc.optString("status", "Recebido")
+
+                    if (existingStatus == "Recebido" && incomingStatus == "Entregue") {
+                        existingEnc.put("status", "Entregue")
+                        existingEnc.put("dataEntrega", enc.optString("dataEntrega", ""))
+                        existingEnc.put("horaEntrega", enc.optString("horaEntrega", ""))
+                        existingEnc.put("porteiroEntrega", enc.optString("porteiroEntrega", ""))
+                        existingEnc.put("assinaturaRaw", enc.optString("assinaturaRaw", ""))
+                        addEnc++
+                    } else {
+                        skipEnc++
+                    }
                 }
             }
         }

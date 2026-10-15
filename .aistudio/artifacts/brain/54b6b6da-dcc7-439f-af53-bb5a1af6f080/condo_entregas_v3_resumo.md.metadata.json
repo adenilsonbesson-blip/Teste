@@ -1,5 +1,5 @@
 {
-  "summary": "Atualização do resumo do projeto para incluir a nova funcionalidade de Backup/Restauração Automática e a reorganização do painel geral.",
-  "updatedAt": "2026-10-15T02:55:15.648431272Z",
+  "summary": "Atualização do resumo do projeto para incluir a mesclagem inteligente de encomendas: se houver um registro pendente no sistema e o backup contiver o mesmo registro como entregue (baixa), ele é atualizado automaticamente.",
+  "updatedAt": "2026-10-15T14:38:26.229006569Z",
   "userFacing": true
 }
