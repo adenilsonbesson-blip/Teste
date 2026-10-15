@@ -1008,6 +1008,23 @@ class AndroidDBInterface(
     }
 
 
+    @JavascriptInterface
+    fun createAutoRestoreBackup(): Boolean {
+        return try {
+            val dbFile = context.getDatabasePath("entregas.db")
+            val backupFile = File(context.getExternalFilesDir(null), "backup_auto_restore.db")
+            if (dbFile.exists()) {
+                dbFile.copyTo(backupFile, overwrite = true)
+                true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
     private fun reconstructJsonFromTables(): String {
         return try {
             val jObj = org.json.JSONObject()
