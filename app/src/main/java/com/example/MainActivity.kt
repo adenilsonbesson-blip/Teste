@@ -149,6 +149,9 @@ class MainActivity : ComponentActivity() {
         // Request Camera Permission on startup to avoid any user interruption during QR scanning
         requestCameraPermission()
 
+        // Check for auto-restore backup file from previous installation
+        checkAndPerformAutoRestore()
+
         setContent {
             MyApplicationTheme {
                 Surface(
@@ -165,6 +168,19 @@ class MainActivity : ComponentActivity() {
     private fun requestCameraPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             requestPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    private fun checkAndPerformAutoRestore() {
+        try {
+            val autoRestoreFile = File(getExternalFilesDir(null), "backup_auto_restore.db")
+            if (autoRestoreFile.exists() && autoRestoreFile.length() > 0) {
+                val bytes = autoRestoreFile.readBytes()
+                AndroidDBInterface(this).mergeIncomingSQLiteBytes(bytes)
+                autoRestoreFile.delete()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 }
@@ -1321,7 +1337,7 @@ class AndroidDBInterface(
         }
     }
 
-    private fun mergeIncomingSQLiteBytes(dbBytes: ByteArray): String {
+    fun mergeIncomingSQLiteBytes(dbBytes: ByteArray): String {
         return try {
             val tempFile = File(context.cacheDir, "temp_import_${System.currentTimeMillis()}.db")
             FileOutputStream(tempFile).use { fos ->

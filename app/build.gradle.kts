@@ -14,8 +14,8 @@ android {
     applicationId = "com.sice.condominio.appv3"
     minSdk = 24
     targetSdk = 36
-    versionCode = 39
-    versionName = "3.9"
+    versionCode = 50
+    versionName = "5.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

@@ -1,5 +1,5 @@
 {
-  "summary": "Atualização do resumo do projeto para incluir a mesclagem inteligente de encomendas: se houver um registro pendente no sistema e o backup contiver o mesmo registro como entregue (baixa), ele é atualizado automaticamente.",
-  "updatedAt": "2026-10-15T14:38:26.229006569Z",
+  "summary": "Atualização do resumo do projeto para incluir a proteção por senha criptografada (SHA-256) na seção de backup do admin e a listagem formatada em fundo branco com letras pretas, caixas de seleção e botões de restauração para os backups gerados do mais recente ao mais antigo.",
+  "updatedAt": "2026-10-15T15:27:48.068049139Z",
   "userFacing": true
 }

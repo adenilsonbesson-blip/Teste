@@ -18,4 +18,9 @@
    - Na primeira inicialização após reinstalar, o app detecta e restaura o banco de dados automaticamente.
 
 5. **Mesclagem Inteligente de Encomendas (Importação de Backup)**:
-   - Ao importar um backup atualizado, se o sistema contiver um registro de encomenda com status pendente (`"Recebido"`) e o arquivo de backup trouxer o mesmo registro já com baixa (`"Entregue"`), o sistema atualiza automaticamente o registro existente com os dados de entrega (data, hora, porteiro e assinatura).
+   - Ao importar um backup atualizado, se o sistema contiver um registro de encomenda com status pendente (`"Recebido"`) e o arquivo de backup trouxer o mesmo registro já com baixa (`"Entregue"`), o sistema atualiza automaticamente o registro existente com os dados de entrega.
+
+6. **Segurança e Visualização de Backups no Admin**:
+   - **Proteção por Senha na Seção de Backup**: Os botões de backup e restauração na Área Admin ficam ocultos por padrão, exigindo que o administrador digite a senha padrão (`123456`), cujo hash SHA-256 é verificado de forma criptografada no código ao clicar no botão "Exibir".
+   - **Lista de Backups Organizada (Mais Recente ao Mais Antigo)**: A modal de importação de banco de dados exibe todos os backups gerados ordenados do mais recente ao mais antigo, cada um com uma caixa de seleção (`checkbox`) e um botão "Restaurar" ao lado.
+   - **Formatação de Alta Legibilidade**: Lista formatada com fundo branco e letras pretas para excelente visualização.
