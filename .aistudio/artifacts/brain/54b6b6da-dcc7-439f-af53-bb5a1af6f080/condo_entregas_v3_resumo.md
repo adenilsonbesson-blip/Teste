@@ -1,13 +1,10 @@
-# CondoEntregas (SICE) v3.0 - Correção de Tela Preta no Emulador
+# Resumo do Projeto: CondoEntregas (v3.9)
 
-### 🌟 Ajustes Realizados para o Emulador em Nuvem (Google AI Studio)
-1. **Eliminação de Tela Preta no WebView**:
-   - Configurado fundo branco explícito (`setBackgroundColor(Color.WHITE)`) no WebView nativo.
-   - Forçado renderização por software (`LAYER_TYPE_SOFTWARE`) para garantir estabilidade em ambientes de streaming em nuvem sem GPU dedicada (evitando falhas em `rendernode`).
-   - Sincronizado o splash screen de carregamento nativo para permanecer visível até que a aplicação Web sinalize prontidão (`notifyAppReady()`), com timeout de segurança (2.5s), eliminando qualquer tela preta ou flash durante a inicialização.
+## Principais Correções Recentes
 
-2. **Compilação e Estabilidade**:
-   - Projeto compilado com sucesso (`Build succeeded`) sem avisos ou erros.
-   - Persistência híbrida (Room SQLite + Backup JSON atômico) e recursos de câmera/impressão totalmente operacionais.
+1. **Correção de "Incompatible update" e Assinatura**:
+   - Alteração do `applicationId` para `com.sice.condominio.appv3` para forçar uma nova instalação limpa, evitando conflitos com versões anteriores.
+   - Configuração de assinatura estrita usando uma chave persistente (`sice-app-key.jks`) localizada na raiz do projeto. Isso garante que futuras atualizações mantenham a mesma assinatura, eliminando erros de compatibilidade.
 
-O sistema está 100% otimizado e exibindo perfeitamente no emulador do Google AI Studio.
+2. **Prevenção de Conflitos de Dados**:
+   - `android:allowBackup` definido como `false` no `AndroidManifest.xml` para desativar o backup automático do Android, impedindo que dados de instalações antigas sejam restaurados e causem erros após reinstalação.

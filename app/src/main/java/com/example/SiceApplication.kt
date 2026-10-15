@@ -10,10 +10,6 @@ import java.io.File
 class SiceApplication : Application() {
     val applicationScope = CoroutineScope(SupervisorJob())
 
-    companion object {
-        var shouldPromptForDataCleanup = false
-    }
-
     lateinit var database: SiceDatabase
         private set
     lateinit var repository: SiceRepository
@@ -24,17 +20,6 @@ class SiceApplication : Application() {
         
         // Search and clean vestigial temporary files from uninstalled versions while preserving active database
         cleanLegacyTracesAndSanitizeStorage(this)
-        
-        // Detect old data for first launch prompt
-        val hasDb = getDatabasePath("entregas.db").exists()
-        val hasJson = File(filesDir, "entregas_backup_v16.json").exists()
-        if (hasDb || hasJson) {
-            val prefs = getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
-            if (!prefs.getBoolean("is_not_first_run", false)) {
-                shouldPromptForDataCleanup = true
-                prefs.edit().putBoolean("is_not_first_run", true).apply()
-            }
-        }
 
         database = SiceDatabase.getDatabase(this, applicationScope)
         repository = SiceRepository(database.siceDao())

@@ -145,26 +145,6 @@ class MainActivity : ComponentActivity() {
         
         // Search and clean vestigial temporary files from uninstalled versions while preserving active database
         cleanLegacyTracesAndSanitizeStorage(this)
-        
-        if (SiceApplication.shouldPromptForDataCleanup) {
-            SiceApplication.shouldPromptForDataCleanup = false
-            android.app.AlertDialog.Builder(this)
-                .setTitle("Limpeza de Dados Antigos")
-                .setMessage("Detectamos dados de uma instalação anterior. Deseja limpar esses dados para evitar erros e começar do zero?")
-                .setPositiveButton("Sim, Limpar") { _, _ ->
-                    val dbInterface = AndroidDBInterface(this)
-                    if (dbInterface.clearAllData()) {
-                        Toast.makeText(this, "Dados limpos com sucesso.", Toast.LENGTH_SHORT).show()
-                        finish()
-                        startActivity(Intent(this, MainActivity::class.java))
-                    } else {
-                        Toast.makeText(this, "Erro ao limpar dados.", Toast.LENGTH_SHORT).show()
-                    }
-                }
-                .setNegativeButton("Não, Manter", null)
-                .setCancelable(false)
-                .show()
-        }
 
         // Request Camera Permission on startup to avoid any user interruption during QR scanning
         requestCameraPermission()
@@ -1027,33 +1007,6 @@ class AndroidDBInterface(
         return ""
     }
 
-    @JavascriptInterface
-    fun clearAllData(): Boolean {
-        return try {
-            runBlocking(Dispatchers.IO) {
-                // Clear Room
-                repository.deleteAllEncomendas()
-                repository.deleteAllMoradores()
-                repository.deleteAllPorteiros()
-                repository.deleteAllEntregadores()
-                
-                val siceDb = app.database
-                siceDb.clearAllTables()
-                siceDb.openHelper.writableDatabase.execSQL("PRAGMA wal_checkpoint(FULL)")
-                
-                // Clear Files
-                context.cacheDir.deleteRecursively()
-                context.filesDir.deleteRecursively()
-                
-                // External files
-                context.getExternalFilesDir(null)?.deleteRecursively()
-            }
-            true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
-        }
-    }
 
     private fun reconstructJsonFromTables(): String {
         return try {
