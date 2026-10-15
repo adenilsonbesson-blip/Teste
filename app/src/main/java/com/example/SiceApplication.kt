@@ -27,17 +27,6 @@ class SiceApplication : Application() {
         // Pre-warm database cache synchronously from local disk for zero-delay startup
         AndroidDBInterface.prewarm(this@SiceApplication, repository)
         
-        // Auto-restore logic: Check for manual backup created before uninstallation
-        val backupFile = File(getExternalFilesDir(null), "backup_auto_restore.db")
-        if (backupFile.exists()) {
-            try {
-                val dbFile = getDatabasePath("entregas.db")
-                backupFile.copyTo(dbFile, overwrite = true)
-                backupFile.delete() // Delete backup after restoration
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
 
         try {
             val prefs = getSharedPreferences(DriveBackupWorker.PREFS_NAME, android.content.Context.MODE_PRIVATE)

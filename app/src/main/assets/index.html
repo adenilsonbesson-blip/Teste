@@ -1952,11 +1952,6 @@
                         </button>
                     </div>
 
-                    <hr style="margin: 2rem 0; border: none; border-top: 1px dashed var(--border);">
-                    
-                    <h3 style="color: var(--danger); font-weight: bold; margin-bottom: 0.5rem; font-size: 1.1rem;">⚠️ Limpeza Completa (Hard Reset)</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">Isso apagará permanentemente todos os cadastros e encomendas, permitindo iniciar o sistema limpo do zero. Essa ação não pode ser desfeita.</p>
-                    <button type="button" class="btn-danger" style="width: auto;" onclick="limparBancoDadosCompleto()">🗑️ Apagar Tudo e Iniciar Instalação Limpa</button>
                 </div>
             </div>
         </section>
@@ -6097,63 +6092,6 @@
             }, "Exportar Planilha Excel (XLSX)");
         }
 
-        function limparBancoDadosCompleto() {
-            exigirAutenticacaoAdmin(() => {
-                exibirCardConfirmacaoModal({
-                    tipo: 'amarelo',
-                    titulo: 'EXCLUSÃO TOTAL DOS DADOS',
-                    subtitulo: 'Aviso crítico de segurança',
-                    icone: '🚨',
-                    mensagem: "Você solicitou a EXCLUSÃO TOTAL dos dados.\n\nISSO APAGARÁ:\n• Todos os Moradores\n• Todos os Porteiros\n• Todos os Entregadores\n• TODO o Histórico de Encomendas\n\nUm backup completo será gerado antes da limpeza. Deseja prosseguir?",
-                    botaoConfirmar: 'Sim, Gerar Backup e Limpar',
-                    botaoCancelar: 'Cancelar',
-                    onConfirm: () => {
-                        exportarBancoDadosCompleto();
-
-                        setTimeout(() => {
-                            exibirCardConfirmacaoModal({
-                                tipo: 'vermelho',
-                                titulo: 'CONFIRMAÇÃO FINAL',
-                                subtitulo: 'Última etapa irreversível',
-                                icone: '⚠️',
-                                mensagem: "Após salvar o arquivo de backup, confirme: tem certeza de que deseja limpar tudo e iniciar uma instalação do zero?",
-                                botaoConfirmar: 'Sim, Limpar Tudo Agora',
-                                botaoCancelar: 'Cancelar',
-                                onConfirm: () => {
-                                    const currAdminUser = db.adminUser;
-                                    const currAdminPass = db.adminPassword;
-                                    const currAdminConfig = db.adminConfigured;
-
-                                    db = {
-                                        encomendas: [],
-                                        moradores: [],
-                                        porteiros: [],
-                                        entregadores: [],
-                                        plataformas: ["Mercado Livre", "Shopee", "Shein", "Magazine Luiza", "C&A", "Mile", "Natura", "Loggi", "TikTok", "Zara", "Amazon"],
-                                        ultimoEntregador: "",
-                                        adminUser: currAdminUser,
-                                        adminPassword: currAdminPass,
-                                        adminConfigured: currAdminConfig
-                                    };
-                                    
-                                    saveStorage();
-                                    exibirCardMensagem({
-                                        tipo: 'verde',
-                                        titulo: 'BANCO DE DADOS ZERADO',
-                                        subtitulo: 'Reiniciando aplicação...',
-                                        icone: '✅',
-                                        mensagem: 'Sistema limpo com sucesso. O aplicativo será reiniciado em instantes.',
-                                        botaoTexto: 'OK',
-                                        onConfirm: () => window.location.reload(),
-                                        autoCloseMs: 2000
-                                    });
-                                }
-                            });
-                        }, 1200);
-                    }
-                });
-            }, "Limpeza Completa do Banco de Dados");
-        }
 
         function limparApenasEncomendas() {
             exigirAutenticacaoAdmin(() => {
@@ -6273,42 +6211,69 @@
 
                 let listaHtml = '';
                 if (backups.length > 0) {
-                    listaHtml = `
-                        <div style="margin-bottom: 1rem; text-align: left;">
-                            <p style="font-size: 0.9rem !important; color: #000000 !important; margin-bottom: 0.75rem; font-weight: 900 !important;">
-                                <strong>📂 Backups gerados no dispositivo (do mais recente ao mais antigo):</strong>
-                            </p>
-                            <div style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.65rem; padding-right: 4px;">
-                    `;
-
+                    let rowsHtml = '';
                     backups.forEach((b) => {
-                        listaHtml += `
-                            <div style="background: #ffffff !important; color: #000000 !important; border: 2px solid #cbd5e1 !important; border-radius: 10px; padding: 0.85rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
-                                <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; overflow: hidden; color: #000000 !important;">
-                                    <input type="checkbox" class="backup-select-checkbox" value="${escapeHtml(b.path)}" style="width: 22px; height: 22px; accent-color: #ea580c; cursor: pointer; flex-shrink: 0;">
-                                    <div style="overflow: hidden; text-overflow: ellipsis; flex: 1; color: #000000 !important;">
-                                        <div style="font-weight: 900 !important; font-size: 0.92rem !important; color: #000000 !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                            💾 ${escapeHtml(b.name || 'Backup.db')}
-                                        </div>
-                                        <div style="font-size: 0.78rem !important; color: #334155 !important; font-weight: 800 !important; margin-top: 3px; display: block;">
-                                            📁 ${escapeHtml(b.directory || 'backupcond')} • 📊 ${escapeHtml(b.sizeFormatted || '')} • 📅 ${escapeHtml(b.dateFormatted || '')}
-                                        </div>
+                        const safePath = escapeHtml(b.path).replace(/'/g, "\\'");
+                        const safeName = escapeHtml(b.name || 'Backup.db').replace(/'/g, "\\'");
+                        rowsHtml += `
+                            <tr style="border-bottom: 1px solid #e2e8f0; background: #ffffff !important; color: #000000 !important; transition: background 0.15s ease;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">
+                                <td style="padding: 0.45rem 0.5rem; text-align: center; vertical-align: middle;">
+                                    <input type="checkbox" class="backup-select-checkbox" value="${escapeHtml(b.path)}" data-name="${escapeHtml(b.name || 'Backup.db')}" style="width: 17px; height: 17px; accent-color: #ea580c; cursor: pointer; margin: 0; vertical-align: middle;" onchange="atualizarSelecaoUnicaBackup(this)">
+                                </td>
+                                <td style="padding: 0.45rem 0.6rem; vertical-align: middle; text-align: left;">
+                                    <div style="font-weight: 800 !important; font-size: 0.82rem !important; color: #000000 !important; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(b.name || 'Backup.db')}">
+                                        💾 ${escapeHtml(b.name || 'Backup.db')}
                                     </div>
-                                </div>
-                                <button type="button" onclick="confirmarRestauracaoBackupArquivo('${escapeHtml(b.path).replace(/'/g, "\\'")}', '${escapeHtml(b.name).replace(/'/g, "\\'")}')" style="background-color: #16a34a !important; color: #ffffff !important; border: none; border-radius: 8px; padding: 0.55rem 1rem; font-size: 0.85rem !important; font-weight: 900 !important; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3);">
-                                    Restaurar
-                                </button>
-                            </div>
+                                    <div style="font-size: 0.7rem !important; color: #475569 !important; font-weight: 600 !important; margin-top: 1px;">
+                                        📁 ${escapeHtml(b.directory || 'backupcond')}
+                                    </div>
+                                </td>
+                                <td style="padding: 0.45rem 0.6rem; vertical-align: middle; text-align: left; font-size: 0.78rem !important; color: #000000 !important; font-weight: 700 !important; white-space: nowrap;">
+                                    📅 ${escapeHtml(b.dateFormatted || '')}
+                                </td>
+                                <td style="padding: 0.45rem 0.6rem; vertical-align: middle; text-align: right; font-size: 0.78rem !important; color: #000000 !important; font-weight: 800 !important; white-space: nowrap;">
+                                    ${escapeHtml(b.sizeFormatted || '')}
+                                </td>
+                                <td style="padding: 0.45rem 0.5rem; vertical-align: middle; text-align: center;">
+                                    <button type="button" onclick="confirmarRestauracaoBackupArquivo('${safePath}', '${safeName}')" style="background-color: #16a34a !important; color: #ffffff !important; border: none; border-radius: 6px; padding: 4px 10px; font-size: 0.75rem !important; font-weight: 800 !important; cursor: pointer; white-space: nowrap; box-shadow: 0 1px 3px rgba(22, 163, 74, 0.3); display: inline-flex; align-items: center; justify-content: center; gap: 3px;">
+                                        Restaurar
+                                    </button>
+                                </td>
+                            </tr>
                         `;
                     });
 
-                    listaHtml += `
+                    listaHtml = `
+                        <div style="margin-bottom: 0.85rem; text-align: left; width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                                <span style="font-size: 0.85rem !important; color: #000000 !important; font-weight: 900 !important;">
+                                    📋 Lista de Backups (${backups.length}):
+                                </span>
+                                <button type="button" onclick="restaurarBackupSelecionadoCheckbox()" style="background-color: #0284c7 !important; color: #ffffff !important; border: none; border-radius: 6px; padding: 4px 10px; font-size: 0.75rem !important; font-weight: 800 !important; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                                    ⚡ Restaurar Marcado
+                                </button>
+                            </div>
+                            <div style="max-height: 300px; overflow-y: auto; overflow-x: auto; border: 2px solid #cbd5e1; border-radius: 8px; background: #ffffff !important;">
+                                <table style="width: 100%; border-collapse: collapse; font-family: inherit; background: #ffffff !important; color: #000000 !important; min-width: 480px;">
+                                    <thead>
+                                        <tr style="background: #f1f5f9; color: #0f172a; border-bottom: 2px solid #cbd5e1; font-weight: 900; font-size: 0.78rem; text-align: left;">
+                                            <th style="padding: 7px 6px; text-align: center; width: 36px; color: #000000 !important;">Sel.</th>
+                                            <th style="padding: 7px 8px; color: #000000 !important;">Arquivo</th>
+                                            <th style="padding: 7px 8px; color: #000000 !important;">Data / Hora</th>
+                                            <th style="padding: 7px 8px; text-align: right; color: #000000 !important;">Tamanho</th>
+                                            <th style="padding: 7px 6px; text-align: center; width: 85px; color: #000000 !important;">Ação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tabela-backups-corpo">
+                                        ${rowsHtml}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     `;
                 } else {
                     listaHtml = `
-                        <div style="background: #ffffff !important; border: 2px solid #cbd5e1 !important; border-radius: 10px; padding: 1.1rem; margin-bottom: 1rem; text-align: left; font-size: 0.9rem !important; color: #000000 !important; font-weight: 800 !important;">
+                        <div style="background: #ffffff !important; border: 2px solid #cbd5e1 !important; border-radius: 10px; padding: 1.25rem; margin-bottom: 1rem; text-align: center; font-size: 0.88rem !important; color: #000000 !important; font-weight: 800 !important;">
                             ℹ️ Nenhum arquivo de backup .db foi encontrado automaticamente no dispositivo.
                         </div>
                     `;
@@ -6329,25 +6294,30 @@
                 content.style.display = 'flex';
                 content.style.alignItems = 'center';
                 content.style.justifyContent = 'center';
-                content.style.padding = '1rem';
+                content.style.padding = '0.75rem';
 
                 content.innerHTML = `
-                    <div style="background: #ffffff !important; color: #000000 !important; border: 3px solid #0f172a !important; border-radius: 16px; max-width: 580px; width: 100%; padding: 1.5rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45); text-align: center; font-family: inherit;">
-                        <div style="font-size: 2.5rem; margin-bottom: 0.25rem;">📥</div>
-                        <h3 style="margin: 0 0 0.35rem 0; font-size: 1.25rem !important; font-weight: 900 !important; color: #0f172a !important; text-transform: uppercase;">SELECIONE O BACKUP PARA RESTAURAR</h3>
-                        <p style="font-size: 0.88rem !important; color: #334155 !important; font-weight: 800 !important; margin-bottom: 1.2rem;">
-                            Lista de backups gerados ordenados do mais recente ao mais antigo:
-                        </p>
+                    <div style="background: #ffffff !important; color: #000000 !important; border: 3px solid #0f172a !important; border-radius: 14px; max-width: 640px; width: 100%; padding: 1.25rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45); text-align: center; font-family: inherit;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 1.6rem;">📥</span>
+                                <div style="text-align: left;">
+                                    <h3 style="margin: 0; font-size: 1.05rem !important; font-weight: 900 !important; color: #0f172a !important;">IMPORTAR BANCO DE DADOS</h3>
+                                    <span style="font-size: 0.75rem !important; color: #64748b !important; font-weight: 700;">Backups gerados ordenados do mais recente ao mais antigo</span>
+                                </div>
+                            </div>
+                            <span onclick="fecharModalImportarBackup()" style="font-size: 1.6rem; color: #64748b; cursor: pointer; line-height: 1; padding: 4px;">&times;</span>
+                        </div>
 
                         ${listaHtml}
 
-                        <div style="display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1rem;">
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap;">
                             <input type="file" id="import-backup-file-modal" accept="*/*" style="display: none;" onchange="fecharModalImportarBackup(); importarBancoDadosCompleto(event);">
-                            <button type="button" onclick="document.getElementById('import-backup-file-modal').click()" style="width: 100%; height: 48px; background: #f97316 !important; color: #ffffff !important; border: none; border-radius: 10px; font-weight: 900 !important; font-size: 0.9rem !important; cursor: pointer;">
-                                📁 Procurar Outro Arquivo (.db) no Dispositivo
+                            <button type="button" onclick="document.getElementById('import-backup-file-modal').click()" style="flex: 1; min-width: 180px; height: 38px; background: #f97316 !important; color: #ffffff !important; border: none; border-radius: 8px; font-weight: 800 !important; font-size: 0.8rem !important; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+                                📁 Procurar Outro Arquivo (.db)
                             </button>
-                            <button type="button" onclick="fecharModalImportarBackup()" style="width: 100%; height: 42px; background: #64748b !important; color: #ffffff !important; border: none; border-radius: 10px; font-weight: 900 !important; font-size: 0.88rem !important; cursor: pointer;">
-                                Cancelar
+                            <button type="button" onclick="fecharModalImportarBackup()" style="height: 38px; padding: 0 1.2rem; background: #64748b !important; color: #ffffff !important; border: none; border-radius: 8px; font-weight: 800 !important; font-size: 0.8rem !important; cursor: pointer;">
+                                Fechar
                             </button>
                         </div>
                     </div>
@@ -6355,6 +6325,25 @@
 
                 document.body.appendChild(content);
             });
+        }
+
+        function atualizarSelecaoUnicaBackup(cb) {
+            if (cb.checked) {
+                document.querySelectorAll('.backup-select-checkbox').forEach(other => {
+                    if (other !== cb) other.checked = false;
+                });
+            }
+        }
+
+        function restaurarBackupSelecionadoCheckbox() {
+            const selecionado = document.querySelector('.backup-select-checkbox:checked');
+            if (!selecionado) {
+                alert("Por favor, marque uma caixa de seleção na tabela para restaurar.");
+                return;
+            }
+            const path = selecionado.value;
+            const name = selecionado.getAttribute('data-name') || 'Backup.db';
+            confirmarRestauracaoBackupArquivo(path, name);
         }
 
 
@@ -10371,147 +10360,6 @@ function doGet(e) {
                     `;
                 }
             }
-
-            // 3. Média de Entregas por Semana por Bloco (com cor única para cada bloco)
-            const mediaSemanalContainer = document.getElementById('dash-media-semanal-bloco-container');
-            if (mediaSemanalContainer) {
-                // Tabela de cores fixas e vibrantes por bloco
-                const mapaCoresBlocos = {
-                    'A': '#3b82f6', // Azul Real
-                    'BLOCO A': '#3b82f6',
-                    'B': '#10b981', // Verde Esmeralda
-                    'BLOCO B': '#10b981',
-                    'C': '#f59e0b', // Âmbar / Laranja Ouro
-                    'BLOCO C': '#f59e0b',
-                    'D': '#8b5cf6', // Violeta / Roxo
-                    'BLOCO D': '#8b5cf6',
-                    'E': '#ec4899', // Rosa Vibrante
-                    'BLOCO E': '#ec4899',
-                    'F': '#06b6d4', // Ciano / Azul Turquesa
-                    'BLOCO F': '#06b6d4',
-                    'G': '#f97316', // Laranja Vivo
-                    'BLOCO G': '#f97316',
-                    'H': '#14b8a6', // Verde Petróleo / Teal
-                    'BLOCO H': '#14b8a6',
-                    'I': '#6366f1', // Índigo / Azul Profundo
-                    'BLOCO I': '#6366f1',
-                    'J': '#84cc16', // Verde Lima
-                    'BLOCO J': '#84cc16',
-                    'ADM': '#64748b', // Ardósia
-                    'ADMINISTRAÇÃO': '#64748b'
-                };
-
-                function getCorBloco(bNome, idx) {
-                    const cleanName = (bNome || '').trim().toUpperCase();
-                    if (mapaCoresBlocos[cleanName]) return mapaCoresBlocos[cleanName];
-                    const numLetra = cleanName.replace('BLOCO', '').trim();
-                    if (mapaCoresBlocos[numLetra]) return mapaCoresBlocos[numLetra];
-
-                    const paletaDinamica = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#6366f1', '#84cc16', '#e11d48', '#0284c7'];
-                    let hash = 0;
-                    for (let i = 0; i < cleanName.length; i++) hash = cleanName.charCodeAt(i) + ((hash << 5) - hash);
-                    return paletaDinamica[Math.abs(hash + idx) % paletaDinamica.length];
-                }
-
-                function extrairSemanaIso(dataStr) {
-                    if (!dataStr) return null;
-                    const partes = dataStr.split(' ')[0].split('-');
-                    if (partes.length < 3) return null;
-                    const y = parseInt(partes[0], 10);
-                    const m = parseInt(partes[1], 10) - 1;
-                    const d = parseInt(partes[2], 10);
-                    const dt = new Date(y, m, d);
-                    if (isNaN(dt.getTime())) return null;
-                    
-                    const dObj = new Date(Date.UTC(dt.getFullYear(), dt.getMonth(), dt.getDate()));
-                    const dayNum = dObj.getUTCDay() || 7;
-                    dObj.setUTCDate(dObj.getUTCDate() + 4 - dayNum);
-                    const yearStart = new Date(Date.UTC(dObj.getUTCFullYear(), 0, 1));
-                    const weekNo = Math.ceil((((dObj - yearStart) / 86400000) + 1) / 7);
-                    return `${dObj.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
-                }
-
-                const blocoEntregas = {};
-                const todasSemanas = new Set();
-                const blocoSemanas = {};
-
-                // Considera encomendas entregues (ou com data registrada)
-                db.encomendas.forEach(e => {
-                    if (e.bloco) {
-                        const bName = e.bloco.trim().toUpperCase();
-                        const dataRef = (e.status === 'Entregue' && e.dataEntrega) ? e.dataEntrega : e.dataEntrada;
-                        const semana = extrairSemanaIso(dataRef);
-                        
-                        if (semana) {
-                            todasSemanas.add(semana);
-                            if (!blocoSemanas[bName]) blocoSemanas[bName] = new Set();
-                            blocoSemanas[bName].add(semana);
-                        }
-
-                        if (e.status === 'Entregue') {
-                            blocoEntregas[bName] = (blocoEntregas[bName] || 0) + 1;
-                        }
-                    }
-                });
-
-                // Inclui blocos cadastrados no sistema que possam estar com 0 entregas
-                if (Array.isArray(db.blocos)) {
-                    db.blocos.forEach(b => {
-                        const bName = b.trim().toUpperCase();
-                        if (blocoEntregas[bName] === undefined) {
-                            blocoEntregas[bName] = 0;
-                        }
-                    });
-                }
-
-                const totalSemanasGlobal = Math.max(1, todasSemanas.size);
-                const blocoMedias = Object.keys(blocoEntregas).map((bName, idx) => {
-                    const totalEnt = blocoEntregas[bName] || 0;
-                    // Se o bloco possui semanas registradas calcula por semanas com histórico ou pelo total de semanas
-                    const semanasBloco = blocoSemanas[bName] ? Math.max(1, blocoSemanas[bName].size) : totalSemanasGlobal;
-                    const media = parseFloat((totalEnt / totalSemanasGlobal).toFixed(1));
-                    return {
-                        nome: bName,
-                        total: totalEnt,
-                        media: media,
-                        cor: getCorBloco(bName, idx)
-                    };
-                });
-
-                blocoMedias.sort((a, b) => b.media - a.media || b.total - a.total);
-
-                if (blocoMedias.length > 0 && blocoMedias.some(b => b.total > 0 || b.media > 0)) {
-                    const maxMedia = Math.max(1, blocoMedias[0].media);
-                    let htmlMedia = "";
-                    blocoMedias.forEach(item => {
-                        const barWidth = Math.max(8, Math.round((item.media / maxMedia) * 100));
-                        const labelBloco = (item.nome.startsWith('BLOCO') || item.nome === 'ADM') ? item.nome : 'BLOCO ' + item.nome;
-                        htmlMedia += `
-                            <div style="margin-bottom: 0.65rem;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; margin-bottom: 0.25rem;">
-                                    <div style="display: flex; align-items: center; gap: 0.45rem;">
-                                        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${item.cor}; box-shadow: 0 0 6px ${item.cor}66;"></span>
-                                        <span style="font-weight: 700; color: var(--text-main); font-family: 'Inter', sans-serif;">${labelBloco}</span>
-                                    </div>
-                                    <span style="font-size: 0.8rem; color: ${item.cor}; font-weight: 800;">${item.media} <small style="font-weight: 500; color: var(--text-muted);">/sem</small></span>
-                                </div>
-                                <div style="width: 100%; height: 8px; background: rgba(0,0,0,0.04); border-radius: 4px; overflow: hidden;">
-                                    <div style="width: ${barWidth}%; height: 100%; background: ${item.cor}; border-radius: 4px; transition: width 0.5s ease-out; box-shadow: 0 1px 3px ${item.cor}44;"></div>
-                                </div>
-                            </div>
-                        `;
-                    });
-                    mediaSemanalContainer.innerHTML = htmlMedia;
-                } else {
-                    mediaSemanalContainer.innerHTML = `
-                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem 1rem; color: var(--text-muted); text-align: center;">
-                            <span style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;">📊</span>
-                            <p style="font-size: 0.85rem; margin: 0;">Sem dados de entregas<br>suficientes para calcular média.</p>
-                        </div>
-                    `;
-                }
-            }
-
             iniciarRelogioDashboard();
         }
 
