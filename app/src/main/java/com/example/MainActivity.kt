@@ -1211,7 +1211,7 @@ class AndroidDBInterface(
                 val deviceName = DriveBackupWorker.getBackupDeviceName(context)
                 val backupFileName = "Backup,$dataStr,$horaStr,$deviceName.db"
                 val cacheBackupFile = File(context.cacheDir, backupFileName)
-                prepareDbForMode(dbFile, cacheBackupFile, mode)
+                prepareDbForMode(dbFile, cacheBackupFile, "completo")
 
                 val uri: Uri = FileProvider.getUriForFile(
                     context,
