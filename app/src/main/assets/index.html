@@ -817,8 +817,8 @@
         <section id="inicio" class="content-section active" style="background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); min-height: 100%; margin: -1rem; padding: 1.5rem 1rem 120px 1rem;">
             <!-- Welcoming Header Area with custom date and clock -->
             <div id="home-clock-container" style="background: #ffffff; border-radius: 16px; padding: 2rem 1.25rem; color: #0f172a; margin-bottom: 1.5rem; border: 2px solid #38bdf8; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 0.5rem; box-shadow: 0 10px 25px rgba(2, 132, 199, 0.12);">
-                <div id="home-date-text" style="font-size: 1.2rem; font-weight: 700; color: #0369a1;">--/--/----</div>
-                <div id="home-clock-text" style="font-size: 3.5rem; font-weight: 800; letter-spacing: -1px; margin: 0; color: #0284c7;">00:00<span style="font-size: 0.5em; opacity: 0.85; font-weight: 700; margin-left: 3px;">:00</span></div>
+                <div id="home-date-text" style="font-size: 1.1rem; font-weight: 700; color: #0369a1;">--/--/----</div>
+                <div id="home-clock-text" style="font-size: 2.8rem; font-weight: 800; letter-spacing: -1px; margin: 0; color: #0284c7;">00:00<span style="font-size: 0.5em; opacity: 0.85; font-weight: 700; margin-left: 3px;">:00</span></div>
                 <div class="ai-badge" style="background: #e0f2fe; border: 1px solid #7dd3fc; color: #0369a1; font-weight: 800; padding: 0.4rem 0.9rem; display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; border-radius: 9999px; margin-top: 0.5rem;">
                     ✨ Sistema de Controle Ativo
                 </div>
@@ -901,48 +901,48 @@
             <div class="dash-side-by-side">
                 <!-- 1. PAR 1: Pendentes (Col 1) e Entregues Hoje (Col 2) -->
                 <!-- Card Pendentes (Vermelho) -->
-                <div style="background: #fef2f2; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.12); border: 2px solid #fca5a5; display: flex; align-items: center; justify-content: space-between; position: relative; transition: transform 0.2s ease;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+                <div style="background: #fef2f2; border-radius: 14px; padding: 1rem; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.12); border: 2px solid #fca5a5; display: flex; align-items: center; justify-content: space-between; position: relative; transition: transform 0.2s ease;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="position: absolute; left: 0; top: 12%; bottom: 12%; width: 5px; border-radius: 0 4px 4px 0; background: #dc2626;"></div>
                     <div style="flex: 1; min-width: 0; padding-left: 0.25rem;">
-                        <div style="color: #991b1b; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Pendentes</div>
-                        <div id="dash-pendentes" style="font-size: 2.2rem; font-weight: 900; color: #dc2626; margin: 0.2rem 0; line-height: 1;">0</div>
-                        <span onclick="switchTab('baixas')" style="color: #dc2626; font-size: 0.75rem; font-weight: 700; cursor: pointer; text-decoration: underline;">Entregar ➔</span>
+                        <div style="color: #991b1b; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Pendentes</div>
+                        <div id="dash-pendentes" style="font-size: 1.8rem; font-weight: 900; color: #dc2626; margin: 0.2rem 0; line-height: 1;">0</div>
+                        <span onclick="switchTab('baixas')" style="color: #dc2626; font-size: 0.7rem; font-weight: 700; cursor: pointer; text-decoration: underline;">Entregar ➔</span>
                     </div>
-                    <div style="background: #fee2e2; width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #dc2626; flex-shrink: 0; border: 1px solid #fca5a5;">⏳</div>
+                    <div style="background: #fee2e2; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: #dc2626; flex-shrink: 0; border: 1px solid #fca5a5;">⏳</div>
                 </div>
 
                 <!-- Card Entregues Hoje (Verde) -->
-                <div style="background: #f0fdf4; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.12); border: 2px solid #86efac; display: flex; align-items: center; justify-content: space-between; position: relative; transition: transform 0.2s ease;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+                <div style="background: #f0fdf4; border-radius: 14px; padding: 1rem; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.12); border: 2px solid #86efac; display: flex; align-items: center; justify-content: space-between; position: relative; transition: transform 0.2s ease;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="position: absolute; left: 0; top: 12%; bottom: 12%; width: 5px; border-radius: 0 4px 4px 0; background: #16a34a;"></div>
                     <div style="flex: 1; min-width: 0; padding-left: 0.25rem;">
-                        <div style="color: #166534; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Entregues Hoje</div>
-                        <div id="dash-entregues" style="font-size: 2.2rem; font-weight: 900; color: #16a34a; margin: 0.2rem 0; line-height: 1;">0</div>
-                        <span onclick="switchTab('relatorios')" style="color: #16a34a; font-size: 0.75rem; font-weight: 700; cursor: pointer; text-decoration: underline;">Ver ➔</span>
+                        <div style="color: #166534; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Entregues Hoje</div>
+                        <div id="dash-entregues" style="font-size: 1.8rem; font-weight: 900; color: #16a34a; margin: 0.2rem 0; line-height: 1;">0</div>
+                        <span onclick="switchTab('relatorios')" style="color: #16a34a; font-size: 0.7rem; font-weight: 700; cursor: pointer; text-decoration: underline;">Ver ➔</span>
                     </div>
-                    <div style="background: #dcfce7; width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #16a34a; flex-shrink: 0; border: 1px solid #86efac;">✅</div>
+                    <div style="background: #dcfce7; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: #16a34a; flex-shrink: 0; border: 1px solid #86efac;">✅</div>
                 </div>
 
                 <!-- 2. PAR 2: Entregue Mês Atual (Col 1) e Mês Anterior (Col 2) -->
                 <!-- Card Entregue Mês Atual (Azul) -->
-                <div style="background: #f0f9ff; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.12); border: 2px solid #7dd3fc; display: flex; align-items: center; justify-content: space-between; position: relative; transition: transform 0.2s ease;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+                <div style="background: #f0f9ff; border-radius: 14px; padding: 1rem; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.12); border: 2px solid #7dd3fc; display: flex; align-items: center; justify-content: space-between; position: relative; transition: transform 0.2s ease;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="position: absolute; left: 0; top: 12%; bottom: 12%; width: 5px; border-radius: 0 4px 4px 0; background: #0284c7;"></div>
                     <div style="flex: 1; min-width: 0; padding-left: 0.25rem;">
-                        <div id="dash-label-mes-atual" style="color: #075985; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Entregue Mês Atual</div>
-                        <div id="dash-linha-mes" style="font-size: 2.2rem; font-weight: 900; color: #0284c7; margin: 0.2rem 0; line-height: 1;">0</div>
-                        <span style="color: #0369a1; font-size: 0.72rem; font-weight: 700;">Mês Vigente</span>
+                        <div id="dash-label-mes-atual" style="color: #075985; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Entregue Mês Atual</div>
+                        <div id="dash-linha-mes" style="font-size: 1.8rem; font-weight: 900; color: #0284c7; margin: 0.2rem 0; line-height: 1;">0</div>
+                        <span style="color: #0369a1; font-size: 0.7rem; font-weight: 700;">Mês Vigente</span>
                     </div>
-                    <div style="background: #e0f2fe; width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #0284c7; flex-shrink: 0; border: 1px solid #7dd3fc;">📅</div>
+                    <div style="background: #e0f2fe; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: #0284c7; flex-shrink: 0; border: 1px solid #7dd3fc;">📅</div>
                 </div>
 
                 <!-- Card Entregue Mês Anterior (Ciano) -->
-                <div style="background: #ecfeff; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(8, 145, 178, 0.12); border: 2px solid #a5f3fc; display: flex; align-items: center; justify-content: space-between; position: relative; transition: transform 0.2s ease;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+                <div style="background: #ecfeff; border-radius: 14px; padding: 1rem; box-shadow: 0 4px 12px rgba(8, 145, 178, 0.12); border: 2px solid #a5f3fc; display: flex; align-items: center; justify-content: space-between; position: relative; transition: transform 0.2s ease;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="position: absolute; left: 0; top: 12%; bottom: 12%; width: 5px; border-radius: 0 4px 4px 0; background: #0891b2;"></div>
                     <div style="flex: 1; min-width: 0; padding-left: 0.25rem;">
-                        <div id="dash-label-mes-anterior" style="color: #155e75; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Entregue Mês Anterior</div>
-                        <div id="dash-linha-mes-anterior" style="font-size: 2.2rem; font-weight: 900; color: #0891b2; margin: 0.2rem 0; line-height: 1;">0</div>
-                        <span style="color: #0e7490; font-size: 0.72rem; font-weight: 700;">Mês Passado</span>
+                        <div id="dash-label-mes-anterior" style="color: #155e75; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Entregue Mês Anterior</div>
+                        <div id="dash-linha-mes-anterior" style="font-size: 1.8rem; font-weight: 900; color: #0891b2; margin: 0.2rem 0; line-height: 1;">0</div>
+                        <span style="color: #0e7490; font-size: 0.7rem; font-weight: 700;">Mês Passado</span>
                     </div>
-                    <div style="background: #cffafe; width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #0891b2; flex-shrink: 0; border: 1px solid #a5f3fc;">📆</div>
+                    <div style="background: #cffafe; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: #0891b2; flex-shrink: 0; border: 1px solid #a5f3fc;">📆</div>
                 </div>
 
                 <!-- 3. PAR 3: Entregues Ano Atual (Col 1) e Ano Anterior (Col 2) -->
@@ -950,35 +950,35 @@
                 <div style="background: #fdf4ff; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(192, 38, 211, 0.12); border: 2px solid #f0abfc; display: flex; align-items: center; justify-content: space-between; position: relative; transition: transform 0.2s ease;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="position: absolute; left: 0; top: 12%; bottom: 12%; width: 5px; border-radius: 0 4px 4px 0; background: #c026d3;"></div>
                     <div style="flex: 1; min-width: 0; padding-left: 0.25rem;">
-                        <div id="dash-label-ano-atual" style="color: #86198f; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Entregues Ano Atual</div>
-                        <div id="dash-linha-ano" style="font-size: 2.2rem; font-weight: 900; color: #c026d3; margin: 0.2rem 0; line-height: 1;">0</div>
-                        <span style="color: #a21caf; font-size: 0.72rem; font-weight: 700;">Ano Em Curso</span>
+                        <div id="dash-label-ano-atual" style="color: #86198f; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Entregues Ano Atual</div>
+                        <div id="dash-linha-ano" style="font-size: 1.8rem; font-weight: 900; color: #c026d3; margin: 0.2rem 0; line-height: 1;">0</div>
+                        <span style="color: #a21caf; font-size: 0.7rem; font-weight: 700;">Ano Em Curso</span>
                     </div>
-                    <div style="background: #fae8ff; width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #c026d3; flex-shrink: 0; border: 1px solid #f0abfc;">🏆</div>
+                    <div style="background: #fae8ff; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: #c026d3; flex-shrink: 0; border: 1px solid #f0abfc;">🏆</div>
                 </div>
 
                 <!-- Card Entregues Ano Anterior (Roxo) -->
-                <div style="background: #faf5ff; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(147, 51, 234, 0.12); border: 2px solid #d8b4fe; display: flex; align-items: center; justify-content: space-between; position: relative; transition: transform 0.2s ease;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+                <div style="background: #faf5ff; border-radius: 14px; padding: 1rem; box-shadow: 0 4px 12px rgba(147, 51, 234, 0.12); border: 2px solid #d8b4fe; display: flex; align-items: center; justify-content: space-between; position: relative; transition: transform 0.2s ease;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="position: absolute; left: 0; top: 12%; bottom: 12%; width: 5px; border-radius: 0 4px 4px 0; background: #9333ea;"></div>
                     <div style="flex: 1; min-width: 0; padding-left: 0.25rem;">
-                        <div id="dash-label-ano-anterior" style="color: #6b21a8; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Entregues Ano Anterior</div>
-                        <div id="dash-linha-ano-anterior" style="font-size: 2.2rem; font-weight: 900; color: #9333ea; margin: 0.2rem 0; line-height: 1;">0</div>
-                        <span style="color: #7e22ce; font-size: 0.72rem; font-weight: 700;">Ano Passado</span>
+                        <div id="dash-label-ano-anterior" style="color: #6b21a8; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Entregues Ano Anterior</div>
+                        <div id="dash-linha-ano-anterior" style="font-size: 1.8rem; font-weight: 900; color: #9333ea; margin: 0.2rem 0; line-height: 1;">0</div>
+                        <span style="color: #7e22ce; font-size: 0.7rem; font-weight: 700;">Ano Passado</span>
                     </div>
-                    <div style="background: #f3e8ff; width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #9333ea; flex-shrink: 0; border: 1px solid #d8b4fe;">📊</div>
+                    <div style="background: #f3e8ff; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: #9333ea; flex-shrink: 0; border: 1px solid #d8b4fe;">📊</div>
                 </div>
 
                 <!-- 4. TOTAL GERAL (Span 2 colunas como destaque central) -->
-                <div class="dash-col-span-2" style="background: #f0fdfa; border-radius: 14px; padding: 1.25rem 1.5rem; box-shadow: 0 4px 12px rgba(13, 148, 136, 0.12); border: 2px solid #5eead4; display: flex; align-items: center; justify-content: space-between; position: relative; transition: transform 0.2s ease;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+                <div class="dash-col-span-2" style="background: #f0fdfa; border-radius: 14px; padding: 1rem 1.25rem; box-shadow: 0 4px 12px rgba(13, 148, 136, 0.12); border: 2px solid #5eead4; display: flex; align-items: center; justify-content: space-between; position: relative; transition: transform 0.2s ease;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="position: absolute; left: 0; top: 12%; bottom: 12%; width: 5px; border-radius: 0 4px 4px 0; background: #0d9488;"></div>
                     <div style="flex: 1; min-width: 0; padding-left: 0.25rem;">
-                        <div style="color: #115e59; font-size: 0.82rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Total Geral</div>
+                        <div style="color: #115e59; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Total Geral</div>
                         <div style="display: flex; align-items: baseline; gap: 0.6rem;">
-                            <div id="dash-total-encomendas" style="font-size: 2.4rem; font-weight: 900; color: #0d9488; margin: 0.2rem 0; line-height: 1;">0</div>
-                            <span style="color: #0f766e; font-size: 0.82rem; font-weight: 700;">encomendas registradas</span>
+                            <div id="dash-total-encomendas" style="font-size: 2.0rem; font-weight: 900; color: #0d9488; margin: 0.2rem 0; line-height: 1;">0</div>
+                            <span style="color: #0f766e; font-size: 0.75rem; font-weight: 700;">encomendas</span>
                         </div>
                     </div>
-                    <div style="background: #ccfbf1; width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #0d9488; flex-shrink: 0; border: 1px solid #5eead4;">📦</div>
+                    <div style="background: #ccfbf1; width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #0d9488; flex-shrink: 0; border: 1px solid #5eead4;">📦</div>
                 </div>
 
                 <!-- Card Bloco / Mês -->
