@@ -46,13 +46,6 @@ class SiceApplication : Application() {
         }
     }
 
-    fun resetDatabaseAndRepository() {
-        SiceDatabase.closeAndResetDatabase()
-        AndroidDBInterface.inMemoryCache = null
-        database = SiceDatabase.getDatabase(this, applicationScope)
-        repository = SiceRepository(database.siceDao())
-    }
-
     override fun getAttributionTag(): String? {
         return "sice_attribution"
     }

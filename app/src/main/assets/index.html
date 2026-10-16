@@ -981,9 +981,8 @@
                     <div style="background: #ccfbf1; width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #0d9488; flex-shrink: 0; border: 1px solid #5eead4;">📦</div>
                 </div>
 
-                <!-- 5. PAR 4: Entregue por Bloco Mês (Col 1) e Média Semanal por Bloco (Col 2) -->
                 <!-- Card Bloco / Mês -->
-                <div class="clickable-card" onclick="abrirCardFullScreen('Encomendas Entregues por Bloco (Mês)', 'dash-top-aptos-container')" style="background: #ffffff; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(20, 184, 166, 0.1); border: 2px solid #99f6e4; position: relative; display: flex; flex-direction: column; min-height: 220px;">
+                <div class="clickable-card dash-col-span-2" onclick="abrirCardFullScreen('Encomendas Entregues por Bloco (Mês)', 'dash-top-aptos-container')" style="background: #ffffff; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(20, 184, 166, 0.1); border: 2px solid #99f6e4; position: relative; display: flex; flex-direction: column; min-height: 220px;">
                     <div style="position: absolute; left: 0; top: 12%; bottom: 12%; width: 5px; border-radius: 0 4px 4px 0; background: #14b8a6;"></div>
                     <div style="color: #0f766e; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem; display: flex; justify-content: space-between;">Entregues / Bloco / Mês <span>🏢</span></div>
                     <div id="dash-top-aptos-container" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem;"></div>
@@ -5945,151 +5944,147 @@
         }
 
         function exportarBancoDadosCompleto() {
-            exigirAutenticacaoAdmin(() => {
-                try {
-                    const mode = 'completo';
-                    if (typeof AndroidDB !== 'undefined' && typeof AndroidDB.exportOriginalDatabase === 'function') {
-                        AndroidDB.exportOriginalDatabase(mode);
-                    } else {
-                        // Fallback para ambiente web/desenvolvimento
-                        const dataAtual = new Date();
-                        const ano = dataAtual.getFullYear();
-                        const mes = String(dataAtual.getMonth() + 1).padStart(2, '0');
-                        const dia = String(dataAtual.getDate()).padStart(2, '0');
-                        const hora = String(dataAtual.getHours()).padStart(2, '0');
-                        const min = String(dataAtual.getMinutes()).padStart(2, '0');
-                        const dataStr = `${dia}-${mes}-${ano}`;
-                        const horaStr = `${hora}h${min}`;
-                        const deviceName = (typeof AndroidDB !== 'undefined' && typeof AndroidDB.getDeviceName === 'function') 
-                            ? AndroidDB.getDeviceName() 
-                            : (db.nomeAparelho || 'Aparelho');
-                        const fileName = `Backup,${dataStr},${horaStr},${deviceName}.db`;
-
-                        const dadosTexto = JSON.stringify(db, null, 2);
-                        const blob = new Blob([dadosTexto], { type: 'text/plain;charset=utf-8' });
-                        const link = document.createElement('a');
-                        link.href = URL.createObjectURL(blob);
-                        link.download = fileName;
-                        link.click();
-                        alert(`Exportação em modo Fallback (.db) concluída como: ${fileName}`);
-                    }
-                } catch (err) {
-                    alert("Erro ao exportar o banco de dados: " + err.message);
-                }
-            }, "Exportar Banco de Dados (.db)");
-        }
-
-        function exportarParaPlanilhaExcel() {
-            exigirAutenticacaoAdmin(() => {
-                try {
+            try {
+                const mode = 'completo';
+                if (typeof AndroidDB !== 'undefined' && typeof AndroidDB.exportOriginalDatabase === 'function') {
+                    AndroidDB.exportOriginalDatabase(mode);
+                } else {
+                    // Fallback para ambiente web/desenvolvimento
                     const dataAtual = new Date();
                     const ano = dataAtual.getFullYear();
                     const mes = String(dataAtual.getMonth() + 1).padStart(2, '0');
                     const dia = String(dataAtual.getDate()).padStart(2, '0');
                     const hora = String(dataAtual.getHours()).padStart(2, '0');
                     const min = String(dataAtual.getMinutes()).padStart(2, '0');
-                    const seg = String(dataAtual.getSeconds()).padStart(2, '0');
-                    const fileName = `CondoEntregas_Planilha_Completa_${dia}_${mes}_${ano}_${hora}${min}${seg}.xlsx`;
+                    const dataStr = `${dia}-${mes}-${ano}`;
+                    const horaStr = `${hora}h${min}`;
+                    const deviceName = (typeof AndroidDB !== 'undefined' && typeof AndroidDB.getDeviceName === 'function') 
+                        ? AndroidDB.getDeviceName() 
+                        : (db.nomeAparelho || 'Aparelho');
+                    const fileName = `Backup,${dataStr},${horaStr},${deviceName}.db`;
 
-                    if (typeof XLSX === 'undefined') {
-                        throw new Error("Biblioteca de geração de planilhas XLSX não carregou corretamente.");
-                    }
-
-                    const wb = XLSX.utils.book_new();
-
-                    // 1. SHEET ENCOMENDAS
-                    const encomendas = db.encomendas || [];
-                    const encRows = encomendas.map(e => {
-                        const isCentral = isBlocoCentral(e.bloco);
-                        return {
-                            "ID": e.id || "",
-                            "Apartamento/Bloco": `${e.apartamento || e.apto || ''} / ${e.bloco || ''}`,
-                            "Morador": isCentral ? "-" : (e.destinatario || e.morador || ""),
-                            "Funcionário": isCentral ? (e.destinatario || e.morador || "") : "-",
-                            "Código Rastreio": e.rastreio || "",
-                            "Data/Hora Entrada": `${e.dataEntrada || ''} ${e.horaEntrada || ''}`.trim(),
-                            "Data/Hora Baixa": (e.entregue || e.status === 'Entregue') ? `${e.dataEntrega || ''} ${e.horaEntrega || ''}`.trim() : "-",
-                            "Status": e.status || (e.entregue ? "Entregue" : "Pendente"),
-                            "Quem Recebeu (Porteiro)": e.recebedor || e.porteiroEntrega || "",
-                            "Quem Entregou (Entregador)": e.entregador || "",
-                            "Morador/Funcionário Retirou": e.moradorRetirou || e.assinaturaRaw || "",
-                            "Tipo de Encomenda": e.tipoEncomenda || "Normal",
-                            "Plataforma": e.plataforma || "",
-                            "Observações": e.observacao || ""
-                        };
-                    });
-                    const wsEnc = XLSX.utils.json_to_sheet(encRows.length ? encRows : [{"Status": "Nenhuma encomenda cadastrada"}]);
-                    XLSX.utils.book_append_sheet(wb, wsEnc, "Encomendas");
-
-                    // 2. SHEET MORADORES
-                    const moradores = db.moradores || [];
-                    const morRows = moradores.map(m => ({
-                        "Nome do Morador": m.nome || "",
-                        "Apartamento": m.apartamento || m.apto || "",
-                        "Bloco": m.bloco || "",
-                        "Responsável": m.responsavel || "",
-                        "Telefone": m.telefone || "",
-                        "WhatsApp": m.whatsapp || "",
-                        "Situação": m.situacao || m.status || "Ativo",
-                        "Observações": m.observacoes || ""
-                    }));
-                    const wsMor = XLSX.utils.json_to_sheet(morRows.length ? morRows : [{"Status": "Nenhum morador cadastrado"}]);
-                    XLSX.utils.book_append_sheet(wb, wsMor, "Moradores");
-
-                    // 3. SHEET PORTEIROS
-                    const porteiros = db.porteiros || [];
-                    const porRows = porteiros.map(p => ({
-                        "Nome do Porteiro": p.nome || "",
-                        "Telefone": p.telefone || "",
-                        "RG": p.rg || "",
-                        "Empresa": p.empresa || "Terceirizado",
-                        "Status": p.status || "Ativo",
-                        "Escala de Trabalho": p.dia || p.turno || "Todos os Dias",
-                        "Observações": p.observacao || ""
-                    }));
-                    const wsPor = XLSX.utils.json_to_sheet(porRows.length ? porRows : [{"Status": "Nenhum porteiro cadastrado"}]);
-                    XLSX.utils.book_append_sheet(wb, wsPor, "Porteiros");
-
-                    // 4. SHEET ENTREGADORES
-                    const entregadores = db.entregadores || [];
-                    const entRows = entregadores.map(e => ({
-                        "Nome do Entregador": e.nome || "",
-                        "Empresa": e.empresa || "",
-                        "RG": e.rg || "",
-                        "Telefone": e.telefone || "",
-                        "Escala": e.dia || "Todos os Dias",
-                        "Placa do Veículo": e.placa || "",
-                        "Status": e.status || "Ativo"
-                    }));
-                    const wsEnt = XLSX.utils.json_to_sheet(entRows.length ? entRows : [{"Status": "Nenhum entregador cadastrado"}]);
-                    XLSX.utils.book_append_sheet(wb, wsEnt, "Entregadores");
-
-                    // Gera o arquivo binário em formato Base64 real OOXML XLSX
-                    const base64Xlsx = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
-
-                    if (typeof AndroidDB !== 'undefined' && typeof AndroidDB.exportSpreadsheet === 'function') {
-                        AndroidDB.exportSpreadsheet(base64Xlsx, fileName);
-                    } else if (typeof AndroidShare !== 'undefined' && typeof AndroidShare.exportSpreadsheet === 'function') {
-                        AndroidShare.exportSpreadsheet(base64Xlsx, fileName);
-                    } else {
-                        // Fallback para navegador web com ArrayBuffer binário real
-                        const binaryStr = atob(base64Xlsx);
-                        const bytes = new Uint8Array(binaryStr.length);
-                        for (let i = 0; i < binaryStr.length; i++) {
-                            bytes[i] = binaryStr.charCodeAt(i);
-                        }
-                        const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                        const link = document.createElement('a');
-                        link.href = URL.createObjectURL(blob);
-                        link.download = fileName;
-                        link.click();
-                        alert("✅ Planilha Excel (.xlsx) gerada com sucesso!\n\nContém planilhas com Encomendas, Moradores, Porteiros e Entregadores.");
-                    }
-                    registrarLog("Exportação para Planilha Excel", `Arquivo gerado: ${fileName}`);
-                } catch (err) {
-                    alert("❌ Erro ao exportar para Excel: " + err.message);
+                    const dadosTexto = JSON.stringify(db, null, 2);
+                    const blob = new Blob([dadosTexto], { type: 'text/plain;charset=utf-8' });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = fileName;
+                    link.click();
+                    alert(`Exportação em modo Fallback (.db) concluída como: ${fileName}`);
                 }
-            }, "Exportar Planilha Excel (XLSX)");
+            } catch (err) {
+                alert("Erro ao exportar o banco de dados: " + err.message);
+            }
+        }
+
+        function exportarParaPlanilhaExcel() {
+            try {
+                const dataAtual = new Date();
+                const ano = dataAtual.getFullYear();
+                const mes = String(dataAtual.getMonth() + 1).padStart(2, '0');
+                const dia = String(dataAtual.getDate()).padStart(2, '0');
+                const hora = String(dataAtual.getHours()).padStart(2, '0');
+                const min = String(dataAtual.getMinutes()).padStart(2, '0');
+                const seg = String(dataAtual.getSeconds()).padStart(2, '0');
+                const fileName = `CondoEntregas_Planilha_Completa_${dia}_${mes}_${ano}_${hora}${min}${seg}.xlsx`;
+
+                if (typeof XLSX === 'undefined') {
+                    throw new Error("Biblioteca de geração de planilhas XLSX não carregou corretamente.");
+                }
+
+                const wb = XLSX.utils.book_new();
+
+                // 1. SHEET ENCOMENDAS
+                const encomendas = db.encomendas || [];
+                const encRows = encomendas.map(e => {
+                    const isCentral = isBlocoCentral(e.bloco);
+                    return {
+                        "ID": e.id || "",
+                        "Apartamento/Bloco": `${e.apartamento || e.apto || ''} / ${e.bloco || ''}`,
+                        "Morador": isCentral ? "-" : (e.destinatario || e.morador || ""),
+                        "Funcionário": isCentral ? (e.destinatario || e.morador || "") : "-",
+                        "Código Rastreio": e.rastreio || "",
+                        "Data/Hora Entrada": `${e.dataEntrada || ''} ${e.horaEntrada || ''}`.trim(),
+                        "Data/Hora Baixa": (e.entregue || e.status === 'Entregue') ? `${e.dataEntrega || ''} ${e.horaEntrega || ''}`.trim() : "-",
+                        "Status": e.status || (e.entregue ? "Entregue" : "Pendente"),
+                        "Quem Recebeu (Porteiro)": e.recebedor || e.porteiroEntrega || "",
+                        "Quem Entregou (Entregador)": e.entregador || "",
+                        "Morador/Funcionário Retirou": e.moradorRetirou || e.assinaturaRaw || "",
+                        "Tipo de Encomenda": e.tipoEncomenda || "Normal",
+                        "Plataforma": e.plataforma || "",
+                        "Observações": e.observacao || ""
+                    };
+                });
+                const wsEnc = XLSX.utils.json_to_sheet(encRows.length ? encRows : [{"Status": "Nenhuma encomenda cadastrada"}]);
+                XLSX.utils.book_append_sheet(wb, wsEnc, "Encomendas");
+
+                // 2. SHEET MORADORES
+                const moradores = db.moradores || [];
+                const morRows = moradores.map(m => ({
+                    "Nome do Morador": m.nome || "",
+                    "Apartamento": m.apartamento || m.apto || "",
+                    "Bloco": m.bloco || "",
+                    "Responsável": m.responsavel || "",
+                    "Telefone": m.telefone || "",
+                    "WhatsApp": m.whatsapp || "",
+                    "Situação": m.situacao || m.status || "Ativo",
+                    "Observações": m.observacoes || ""
+                }));
+                const wsMor = XLSX.utils.json_to_sheet(morRows.length ? morRows : [{"Status": "Nenhum morador cadastrado"}]);
+                XLSX.utils.book_append_sheet(wb, wsMor, "Moradores");
+
+                // 3. SHEET PORTEIROS
+                const porteiros = db.porteiros || [];
+                const porRows = porteiros.map(p => ({
+                    "Nome do Porteiro": p.nome || "",
+                    "Telefone": p.telefone || "",
+                    "RG": p.rg || "",
+                    "Empresa": p.empresa || "Terceirizado",
+                    "Status": p.status || "Ativo",
+                    "Escala de Trabalho": p.dia || p.turno || "Todos os Dias",
+                    "Observações": p.observacao || ""
+                }));
+                const wsPor = XLSX.utils.json_to_sheet(porRows.length ? porRows : [{"Status": "Nenhum porteiro cadastrado"}]);
+                XLSX.utils.book_append_sheet(wb, wsPor, "Porteiros");
+
+                // 4. SHEET ENTREGADORES
+                const entregadores = db.entregadores || [];
+                const entRows = entregadores.map(e => ({
+                    "Nome do Entregador": e.nome || "",
+                    "Empresa": e.empresa || "",
+                    "RG": e.rg || "",
+                    "Telefone": e.telefone || "",
+                    "Escala": e.dia || "Todos os Dias",
+                    "Placa do Veículo": e.placa || "",
+                    "Status": e.status || "Ativo"
+                }));
+                const wsEnt = XLSX.utils.json_to_sheet(entRows.length ? entRows : [{"Status": "Nenhum entregador cadastrado"}]);
+                XLSX.utils.book_append_sheet(wb, wsEnt, "Entregadores");
+
+                // Gera o arquivo binário em formato Base64 real OOXML XLSX
+                const base64Xlsx = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+
+                if (typeof AndroidDB !== 'undefined' && typeof AndroidDB.exportSpreadsheet === 'function') {
+                    AndroidDB.exportSpreadsheet(base64Xlsx, fileName);
+                } else if (typeof AndroidShare !== 'undefined' && typeof AndroidShare.exportSpreadsheet === 'function') {
+                    AndroidShare.exportSpreadsheet(base64Xlsx, fileName);
+                } else {
+                    // Fallback para navegador web com ArrayBuffer binário real
+                    const binaryStr = atob(base64Xlsx);
+                    const bytes = new Uint8Array(binaryStr.length);
+                    for (let i = 0; i < binaryStr.length; i++) {
+                        bytes[i] = binaryStr.charCodeAt(i);
+                    }
+                    const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = fileName;
+                    link.click();
+                    alert("✅ Planilha Excel (.xlsx) gerada com sucesso!\n\nContém planilhas com Encomendas, Moradores, Porteiros e Entregadores.");
+                }
+                registrarLog("Exportação para Planilha Excel", `Arquivo gerado: ${fileName}`);
+            } catch (err) {
+                alert("❌ Erro ao exportar para Excel: " + err.message);
+            }
         }
 
 
@@ -6153,17 +6148,24 @@
         }
 
         async function desbloquearSecaoBackupAdmin() {
-            const senha = document.getElementById('input-senha-admin-backup').value;
+            const inputSenha = document.getElementById('input-senha-admin-backup');
+            const senha = inputSenha ? inputSenha.value : '';
+            if (!senha) {
+                alert("Por favor, digite a senha.");
+                return;
+            }
             const msgBuffer = new TextEncoder().encode(senha);
             const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
             const hashArray = Array.from(new Uint8Array(hashBuffer));
             const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
             // SHA-256 for "123456"
             if (hashHex === "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92") {
-                document.getElementById('backup-auth-block').style.display = 'none';
-                document.getElementById('backup-botoes-protegidos-container').style.display = 'flex';
+                const authBlock = document.getElementById('backup-auth-block');
+                if (authBlock) authBlock.style.display = 'none';
+                const infoContainer = document.getElementById('backup-info-protegidas-container');
+                if (infoContainer) infoContainer.style.display = 'flex';
                 if (typeof exibirToastRapido === 'function') {
-                    exibirToastRapido('🔓 Opções de backup desbloqueadas com sucesso!', 'sucesso');
+                    exibirToastRapido('🔓 Informações avançadas exibidas com sucesso!', 'sucesso');
                 }
             } else {
                 alert("Senha incorreta!");
@@ -6196,135 +6198,133 @@
         }
 
         function abrirModalImportarBackup() {
-            exigirAutenticacaoAdmin(() => {
-                let backups = [];
-                if (typeof AndroidDB !== 'undefined' && typeof AndroidDB.listBackupFiles === 'function') {
-                    try {
-                        const jsonStr = AndroidDB.listBackupFiles();
-                        if (jsonStr) {
-                            backups = JSON.parse(jsonStr);
-                        }
-                    } catch (e) {
-                        console.error("Erro ao listar backups do dispositivo:", e);
+            let backups = [];
+            if (typeof AndroidDB !== 'undefined' && typeof AndroidDB.listBackupFiles === 'function') {
+                try {
+                    const jsonStr = AndroidDB.listBackupFiles();
+                    if (jsonStr) {
+                        backups = JSON.parse(jsonStr);
                     }
+                } catch (e) {
+                    console.error("Erro ao listar backups do dispositivo:", e);
                 }
+            }
 
-                let listaHtml = '';
-                if (backups.length > 0) {
-                    let rowsHtml = '';
-                    backups.forEach((b) => {
-                        const safePath = escapeHtml(b.path).replace(/'/g, "\\'");
-                        const safeName = escapeHtml(b.name || 'Backup.db').replace(/'/g, "\\'");
-                        rowsHtml += `
-                            <tr style="border-bottom: 1px solid #e2e8f0; background: #ffffff !important; color: #000000 !important; transition: background 0.15s ease;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">
-                                <td style="padding: 0.45rem 0.5rem; text-align: center; vertical-align: middle;">
-                                    <input type="checkbox" class="backup-select-checkbox" value="${escapeHtml(b.path)}" data-name="${escapeHtml(b.name || 'Backup.db')}" style="width: 17px; height: 17px; accent-color: #ea580c; cursor: pointer; margin: 0; vertical-align: middle;" onchange="atualizarSelecaoUnicaBackup(this)">
-                                </td>
-                                <td style="padding: 0.45rem 0.6rem; vertical-align: middle; text-align: left;">
-                                    <div style="font-weight: 800 !important; font-size: 0.82rem !important; color: #000000 !important; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(b.name || 'Backup.db')}">
-                                        💾 ${escapeHtml(b.name || 'Backup.db')}
-                                    </div>
-                                    <div style="font-size: 0.7rem !important; color: #475569 !important; font-weight: 600 !important; margin-top: 1px;">
-                                        📁 ${escapeHtml(b.directory || 'backupcond')}
-                                    </div>
-                                </td>
-                                <td style="padding: 0.45rem 0.6rem; vertical-align: middle; text-align: left; font-size: 0.78rem !important; color: #000000 !important; font-weight: 700 !important; white-space: nowrap;">
-                                    📅 ${escapeHtml(b.dateFormatted || '')}
-                                </td>
-                                <td style="padding: 0.45rem 0.6rem; vertical-align: middle; text-align: right; font-size: 0.78rem !important; color: #000000 !important; font-weight: 800 !important; white-space: nowrap;">
-                                    ${escapeHtml(b.sizeFormatted || '')}
-                                </td>
-                                <td style="padding: 0.45rem 0.5rem; vertical-align: middle; text-align: center;">
-                                    <button type="button" onclick="confirmarRestauracaoBackupArquivo('${safePath}', '${safeName}')" style="background-color: #16a34a !important; color: #ffffff !important; border: none; border-radius: 6px; padding: 4px 10px; font-size: 0.75rem !important; font-weight: 800 !important; cursor: pointer; white-space: nowrap; box-shadow: 0 1px 3px rgba(22, 163, 74, 0.3); display: inline-flex; align-items: center; justify-content: center; gap: 3px;">
-                                        Restaurar
-                                    </button>
-                                </td>
-                            </tr>
-                        `;
-                    });
-
-                    listaHtml = `
-                        <div style="margin-bottom: 0.85rem; text-align: left; width: 100%;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-                                <span style="font-size: 0.85rem !important; color: #000000 !important; font-weight: 900 !important;">
-                                    📋 Lista de Backups (${backups.length}):
-                                </span>
-                                <button type="button" onclick="restaurarBackupSelecionadoCheckbox()" style="background-color: #0284c7 !important; color: #ffffff !important; border: none; border-radius: 6px; padding: 4px 10px; font-size: 0.75rem !important; font-weight: 800 !important; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
-                                    ⚡ Restaurar Marcado
-                                </button>
-                            </div>
-                            <div style="max-height: 300px; overflow-y: auto; overflow-x: auto; border: 2px solid #cbd5e1; border-radius: 8px; background: #ffffff !important;">
-                                <table style="width: 100%; border-collapse: collapse; font-family: inherit; background: #ffffff !important; color: #000000 !important; min-width: 480px;">
-                                    <thead>
-                                        <tr style="background: #f1f5f9; color: #0f172a; border-bottom: 2px solid #cbd5e1; font-weight: 900; font-size: 0.78rem; text-align: left;">
-                                            <th style="padding: 7px 6px; text-align: center; width: 36px; color: #000000 !important;">Sel.</th>
-                                            <th style="padding: 7px 8px; color: #000000 !important;">Arquivo</th>
-                                            <th style="padding: 7px 8px; color: #000000 !important;">Data / Hora</th>
-                                            <th style="padding: 7px 8px; text-align: right; color: #000000 !important;">Tamanho</th>
-                                            <th style="padding: 7px 6px; text-align: center; width: 85px; color: #000000 !important;">Ação</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tabela-backups-corpo">
-                                        ${rowsHtml}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    listaHtml = `
-                        <div style="background: #ffffff !important; border: 2px solid #cbd5e1 !important; border-radius: 10px; padding: 1.25rem; margin-bottom: 1rem; text-align: center; font-size: 0.88rem !important; color: #000000 !important; font-weight: 800 !important;">
-                            ℹ️ Nenhum arquivo de backup .db foi encontrado automaticamente no dispositivo.
-                        </div>
-                    `;
-                }
-
-                fecharModalImportarBackup();
-
-                const content = document.createElement('div');
-                content.id = 'modal-import-backup-custom';
-                content.style.position = 'fixed';
-                content.style.top = '0';
-                content.style.left = '0';
-                content.style.right = '0';
-                content.style.bottom = '0';
-                content.style.backgroundColor = 'rgba(15, 23, 42, 0.82)';
-                content.style.backdropFilter = 'blur(4px)';
-                content.style.zIndex = '99999';
-                content.style.display = 'flex';
-                content.style.alignItems = 'center';
-                content.style.justifyContent = 'center';
-                content.style.padding = '0.75rem';
-
-                content.innerHTML = `
-                    <div style="background: #ffffff !important; color: #000000 !important; border: 3px solid #0f172a !important; border-radius: 14px; max-width: 640px; width: 100%; padding: 1.25rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45); text-align: center; font-family: inherit;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 0.5rem;">
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span style="font-size: 1.6rem;">📥</span>
-                                <div style="text-align: left;">
-                                    <h3 style="margin: 0; font-size: 1.05rem !important; font-weight: 900 !important; color: #0f172a !important;">IMPORTAR BANCO DE DADOS</h3>
-                                    <span style="font-size: 0.75rem !important; color: #64748b !important; font-weight: 700;">Backups gerados ordenados do mais recente ao mais antigo</span>
+            let listaHtml = '';
+            if (backups.length > 0) {
+                let rowsHtml = '';
+                backups.forEach((b) => {
+                    const safePath = escapeHtml(b.path).replace(/'/g, "\\'");
+                    const safeName = escapeHtml(b.name || 'Backup.db').replace(/'/g, "\\'");
+                    rowsHtml += `
+                        <tr style="border-bottom: 1px solid #e2e8f0; background: #ffffff !important; color: #000000 !important; transition: background 0.15s ease;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">
+                            <td style="padding: 0.35rem 0.4rem; text-align: center; vertical-align: middle;">
+                                <input type="checkbox" class="backup-select-checkbox" value="${escapeHtml(b.path)}" data-name="${escapeHtml(b.name || 'Backup.db')}" style="width: 16px; height: 16px; accent-color: #ea580c; cursor: pointer; margin: 0; vertical-align: middle;" onchange="atualizarSelecaoUnicaBackup(this)">
+                            </td>
+                            <td style="padding: 0.35rem 0.5rem; vertical-align: middle; text-align: left;">
+                                <div style="font-weight: 800 !important; font-size: 0.8rem !important; color: #000000 !important; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(b.name || 'Backup.db')}">
+                                    💾 ${escapeHtml(b.name || 'Backup.db')}
                                 </div>
-                            </div>
-                            <span onclick="fecharModalImportarBackup()" style="font-size: 1.6rem; color: #64748b; cursor: pointer; line-height: 1; padding: 4px;">&times;</span>
+                                <div style="font-size: 0.68rem !important; color: #475569 !important; font-weight: 600 !important; margin-top: 1px;">
+                                    📁 ${escapeHtml(b.directory || 'backupcond')}
+                                </div>
+                            </td>
+                            <td style="padding: 0.35rem 0.5rem; vertical-align: middle; text-align: left; font-size: 0.75rem !important; color: #000000 !important; font-weight: 700 !important; white-space: nowrap;">
+                                📅 ${escapeHtml(b.dateFormatted || '')}
+                            </td>
+                            <td style="padding: 0.35rem 0.5rem; vertical-align: middle; text-align: right; font-size: 0.75rem !important; color: #000000 !important; font-weight: 800 !important; white-space: nowrap;">
+                                ${escapeHtml(b.sizeFormatted || '')}
+                            </td>
+                            <td style="padding: 0.35rem 0.4rem; vertical-align: middle; text-align: center;">
+                                <button type="button" onclick="confirmarRestauracaoBackupArquivo('${safePath}', '${safeName}')" style="background-color: #16a34a !important; color: #ffffff !important; border: none; border-radius: 4px; padding: 3px 8px; font-size: 0.72rem !important; font-weight: 800 !important; cursor: pointer; white-space: nowrap; box-shadow: 0 1px 3px rgba(22, 163, 74, 0.3); display: inline-flex; align-items: center; justify-content: center;">
+                                    Restaurar
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                listaHtml = `
+                    <div style="margin-bottom: 0.85rem; text-align: left; width: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                            <span style="font-size: 0.82rem !important; color: #000000 !important; font-weight: 900 !important;">
+                                📋 Lista de Backups (${backups.length}):
+                            </span>
+                            <button type="button" onclick="restaurarBackupSelecionadoCheckbox()" style="background-color: #0284c7 !important; color: #ffffff !important; border: none; border-radius: 4px; padding: 3px 8px; font-size: 0.72rem !important; font-weight: 800 !important; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;">
+                                ⚡ Restaurar Marcado
+                            </button>
                         </div>
-
-                        ${listaHtml}
-
-                        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap;">
-                            <input type="file" id="import-backup-file-modal" accept="*/*" style="display: none;" onchange="fecharModalImportarBackup(); importarBancoDadosCompleto(event);">
-                            <button type="button" onclick="document.getElementById('import-backup-file-modal').click()" style="flex: 1; min-width: 180px; height: 38px; background: #f97316 !important; color: #ffffff !important; border: none; border-radius: 8px; font-weight: 800 !important; font-size: 0.8rem !important; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
-                                📁 Procurar Outro Arquivo (.db)
-                            </button>
-                            <button type="button" onclick="fecharModalImportarBackup()" style="height: 38px; padding: 0 1.2rem; background: #64748b !important; color: #ffffff !important; border: none; border-radius: 8px; font-weight: 800 !important; font-size: 0.8rem !important; cursor: pointer;">
-                                Fechar
-                            </button>
+                        <div style="max-height: 280px; overflow-y: auto; overflow-x: auto; border: 1.5px solid #cbd5e1; border-radius: 8px; background: #ffffff !important;">
+                            <table style="width: 100%; border-collapse: collapse; font-family: inherit; background: #ffffff !important; color: #000000 !important; min-width: 480px;">
+                                <thead>
+                                    <tr style="background: #f1f5f9; color: #0f172a; border-bottom: 2px solid #cbd5e1; font-weight: 900; font-size: 0.76rem; text-align: left;">
+                                        <th style="padding: 6px 4px; text-align: center; width: 34px; color: #000000 !important;">Sel.</th>
+                                        <th style="padding: 6px 6px; color: #000000 !important;">Arquivo</th>
+                                        <th style="padding: 6px 6px; color: #000000 !important;">Data / Hora</th>
+                                        <th style="padding: 6px 6px; text-align: right; color: #000000 !important;">Tamanho</th>
+                                        <th style="padding: 6px 4px; text-align: center; width: 75px; color: #000000 !important;">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabela-backups-corpo">
+                                    ${rowsHtml}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 `;
+            } else {
+                listaHtml = `
+                    <div style="background: #ffffff !important; border: 2px solid #cbd5e1 !important; border-radius: 10px; padding: 1.25rem; margin-bottom: 1rem; text-align: center; font-size: 0.88rem !important; color: #000000 !important; font-weight: 800 !important;">
+                        ℹ️ Nenhum arquivo de backup .db foi encontrado automaticamente no dispositivo.
+                    </div>
+                `;
+            }
 
-                document.body.appendChild(content);
-            });
+            fecharModalImportarBackup();
+
+            const content = document.createElement('div');
+            content.id = 'modal-import-backup-custom';
+            content.style.position = 'fixed';
+            content.style.top = '0';
+            content.style.left = '0';
+            content.style.right = '0';
+            content.style.bottom = '0';
+            content.style.backgroundColor = 'rgba(15, 23, 42, 0.82)';
+            content.style.backdropFilter = 'blur(4px)';
+            content.style.zIndex = '99999';
+            content.style.display = 'flex';
+            content.style.alignItems = 'center';
+            content.style.justifyContent = 'center';
+            content.style.padding = '0.75rem';
+
+            content.innerHTML = `
+                <div style="background: #ffffff !important; color: #000000 !important; border: 3px solid #0f172a !important; border-radius: 14px; max-width: 640px; width: 100%; padding: 1.25rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45); text-align: center; font-family: inherit;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 0.5rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="font-size: 1.6rem;">📥</span>
+                            <div style="text-align: left;">
+                                <h3 style="margin: 0; font-size: 1.05rem !important; font-weight: 900 !important; color: #0f172a !important;">IMPORTAR BANCO DE DADOS</h3>
+                                <span style="font-size: 0.75rem !important; color: #64748b !important; font-weight: 700;">Backups gerados ordenados do mais recente ao mais antigo</span>
+                            </div>
+                        </div>
+                        <span onclick="fecharModalImportarBackup()" style="font-size: 1.6rem; color: #64748b; cursor: pointer; line-height: 1; padding: 4px;">&times;</span>
+                    </div>
+
+                    ${listaHtml}
+
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap;">
+                        <input type="file" id="import-backup-file-modal" accept="*/*" style="display: none;" onchange="fecharModalImportarBackup(); importarBancoDadosCompleto(event);">
+                        <button type="button" onclick="document.getElementById('import-backup-file-modal').click()" style="flex: 1; min-width: 170px; height: 36px; background: #f97316 !important; color: #ffffff !important; border: none; border-radius: 6px; font-weight: 800 !important; font-size: 0.78rem !important; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+                            📁 Procurar Outro Arquivo (.db)
+                        </button>
+                        <button type="button" onclick="fecharModalImportarBackup()" style="height: 36px; padding: 0 1rem; background: #64748b !important; color: #ffffff !important; border: none; border-radius: 6px; font-weight: 800 !important; font-size: 0.78rem !important; cursor: pointer;">
+                            Fechar
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(content);
         }
 
         function atualizarSelecaoUnicaBackup(cb) {
@@ -10292,74 +10292,6 @@ function doGet(e) {
                 }
             }
 
-            // 2. Média de Entregas Diárias por Bloco
-            const blocoEntregasDiarias = {};
-            const todasDatasEntregas = new Set();
-            const blocoDatasEntregas = {};
-
-            db.encomendas.forEach(e => {
-                if (e.bloco) {
-                    const bName = e.bloco.trim().toUpperCase();
-                    const dataRef = (e.status === 'Entregue' && e.dataEntrega) ? e.dataEntrega : e.dataEntrada;
-                    if (dataRef) {
-                        const dataDia = dataRef.split(' ')[0];
-                        todasDatasEntregas.add(dataDia);
-                        if (!blocoDatasEntregas[bName]) blocoDatasEntregas[bName] = new Set();
-                        blocoDatasEntregas[bName].add(dataDia);
-                    }
-
-                    if (e.status === 'Entregue') {
-                        blocoEntregasDiarias[bName] = (blocoEntregasDiarias[bName] || 0) + 1;
-                    }
-                }
-            });
-
-            if (Array.isArray(db.blocos)) {
-                db.blocos.forEach(b => {
-                    const bName = b.trim().toUpperCase();
-                    if (blocoEntregasDiarias[bName] === undefined) {
-                        blocoEntregasDiarias[bName] = 0;
-                    }
-                });
-            }
-
-            const totalDiasGlobal = Math.max(1, todasDatasEntregas.size);
-            const sortedMediasDiarias = Object.keys(blocoEntregasDiarias).map(bName => {
-                const total = blocoEntregasDiarias[bName] || 0;
-                const media = parseFloat((total / totalDiasGlobal).toFixed(1));
-                return { nome: bName, total, media };
-            }).sort((a, b) => b.media - a.media || b.total - a.total);
-
-            const baixasContainer = document.getElementById('dash-baixas-bloco-container');
-            if (baixasContainer) {
-                let htmlBaixas = "";
-                if (sortedMediasDiarias.length > 0 && sortedMediasDiarias.some(b => b.total > 0 || b.media > 0)) {
-                    const maxMediaDiaria = Math.max(0.1, sortedMediasDiarias[0].media);
-                    sortedMediasDiarias.forEach(item => {
-                        const barWidthB = Math.max(6, Math.round((item.media / maxMediaDiaria) * 100));
-                        const labelBloco = (item.nome.startsWith('BLOCO') || item.nome === 'ADM') ? item.nome : 'BLOCO ' + item.nome;
-                        htmlBaixas += `
-                            <div style="margin-bottom: 0.65rem;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; margin-bottom: 0.25rem;">
-                                    <span style="font-weight: 700; color: var(--text-main); font-family: 'Inter', sans-serif;">${labelBloco}</span>
-                                    <span style="font-size: 0.8rem; color: #ec4899; font-weight: 800;">${item.media} <small style="font-weight: 500; color: var(--text-muted);">/dia</small></span>
-                                </div>
-                                <div style="width: 100%; height: 8px; background: rgba(0,0,0,0.04); border-radius: 4px; overflow: hidden;">
-                                    <div style="width: ${barWidthB}%; height: 100%; background: linear-gradient(90deg, #ec4899, #be185d); border-radius: 4px; transition: width 0.5s ease-out;"></div>
-                                </div>
-                            </div>
-                        `;
-                    });
-                    baixasContainer.innerHTML = htmlBaixas;
-                } else {
-                    baixasContainer.innerHTML = `
-                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem 1rem; color: var(--text-muted); text-align: center;">
-                            <span style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;">📦</span>
-                            <p style="font-size: 0.85rem; margin: 0;">Sem dados de entregas<br>suficientes para calcular média diária.</p>
-                        </div>
-                    `;
-                }
-            }
             iniciarRelogioDashboard();
         }
 

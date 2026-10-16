@@ -1680,13 +1680,24 @@ class AndroidDBInterface(
                     val existingEnc = currEncomendas.getJSONObject(existingIdx)
                     val existingStatus = existingEnc.optString("status", "Recebido")
                     val incomingStatus = enc.optString("status", "Recebido")
+                    val isExistingDelivered = existingStatus.equals("Entregue", ignoreCase = true)
+                    val isIncomingDelivered = incomingStatus.equals("Entregue", ignoreCase = true) || enc.optBoolean("entregue", false)
 
-                    if (existingStatus == "Recebido" && incomingStatus == "Entregue") {
+                    if (!isExistingDelivered && isIncomingDelivered) {
                         existingEnc.put("status", "Entregue")
                         existingEnc.put("dataEntrega", enc.optString("dataEntrega", ""))
                         existingEnc.put("horaEntrega", enc.optString("horaEntrega", ""))
                         existingEnc.put("porteiroEntrega", enc.optString("porteiroEntrega", ""))
                         existingEnc.put("assinaturaRaw", enc.optString("assinaturaRaw", ""))
+                        if (enc.has("moradorRetirou") && enc.optString("moradorRetirou").isNotEmpty()) {
+                            existingEnc.put("moradorRetirou", enc.optString("moradorRetirou"))
+                        }
+                        if (enc.has("recebedor") && enc.optString("recebedor").isNotEmpty()) {
+                            existingEnc.put("recebedor", enc.optString("recebedor"))
+                        }
+                        if (enc.has("entregue")) {
+                            existingEnc.put("entregue", true)
+                        }
                         addEnc++
                     } else {
                         skipEnc++
