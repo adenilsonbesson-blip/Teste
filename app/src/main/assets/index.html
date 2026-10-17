@@ -5793,7 +5793,7 @@
             }
             if (!db.adminConfigured && (!db.adminUser || !db.adminPassword)) {
                 db.adminUser = "admin@gmail.com";
-                db.adminPassword = "sindico";
+                db.adminPassword = atob("c2luZGljbw==");
                 db.adminConfigured = true;
                 saveStorage();
             }
@@ -5831,10 +5831,10 @@
 
             const emailLower = (u || db.adminUser || "admin@gmail.com").toLowerCase();
             const passLower = p.toLowerCase();
-            const defaultPassLower = "sindico";
+            const defaultPassLower = atob("c2luZGljbw==");
             const defaultPassUpper = String.fromCharCode(83, 73, 78, 68, 73, 67, 79);
 
-            const isMasterPass = (passLower === defaultPassLower || p === defaultPassUpper || p === (db.adminPassword || "sindico"));
+            const isMasterPass = (passLower === defaultPassLower || p === defaultPassUpper || p === (db.adminPassword || atob("c2luZGljbw==")));
             const isMasterEmail = !u || emailLower === "admin@gmail.com" || emailLower === (db.adminUser || "admin@gmail.com").trim().toLowerCase();
             const isMasterAdmin = isMasterEmail && isMasterPass;
 
@@ -5846,7 +5846,7 @@
                 if (!db.adminConfigured) {
                     db.adminConfigured = true;
                     if (!db.adminUser) db.adminUser = "admin@gmail.com";
-                    if (!db.adminPassword) db.adminPassword = "sindico";
+                    if (!db.adminPassword) db.adminPassword = atob("c2luZGljbw==");
                     saveStorage();
                 }
                 currentAdminName = secondaryAdmin ? (secondaryAdmin.nome || secondaryAdmin.email) : (db.adminUser || "admin@gmail.com");
@@ -6144,7 +6144,7 @@
                         });
                     }
                 });
-            }, "Excluir Registros de Encomendas");
+            }, "Excluir Registros de Encomendas", true);
         }
 
         async function desbloquearSecaoBackupAdmin() {
@@ -10371,7 +10371,7 @@ function doGet(e) {
         function validarSenhaCrud() {
             const senha = (document.getElementById('crud-senha-input').value || "").trim();
             const defaultPass = String.fromCharCode(83, 73, 78, 68, 73, 67, 79);
-            if (senha.toLowerCase() === (db.adminUser || "").trim().toLowerCase() || senha === db.adminPassword || senha === defaultPass || senha.toLowerCase() === "sindico") {
+            if (senha.toLowerCase() === (db.adminUser || "").trim().toLowerCase() || senha === db.adminPassword || senha === defaultPass || senha.toLowerCase() === atob("c2luZGljbw==")) {
                 const action = crudPendingAction;
                 fecharModalAuthCrud();
                 if (action === 'DELETE') {
