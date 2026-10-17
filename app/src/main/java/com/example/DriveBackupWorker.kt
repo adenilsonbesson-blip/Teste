@@ -70,18 +70,18 @@ class DriveBackupWorker(
             // O backup automático sempre fará o backup completo
             prefs.edit().putString(PREF_BACKUP_MODE, "completo").apply()
 
-            // O agendamento automático somente ativa após as 00:00 horas
+            // O agendamento automático foi alterado para as 07:00 da manhã
             val now = java.util.Calendar.getInstance()
-            val nextMidnight = java.util.Calendar.getInstance().apply {
-                set(java.util.Calendar.HOUR_OF_DAY, 0)
-                set(java.util.Calendar.MINUTE, 5) // Executa 5 minutos após as 00:00
+            val nextSevenAm = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.HOUR_OF_DAY, 7)
+                set(java.util.Calendar.MINUTE, 0)
                 set(java.util.Calendar.SECOND, 0)
                 set(java.util.Calendar.MILLISECOND, 0)
                 if (before(now)) {
                     add(java.util.Calendar.DAY_OF_MONTH, 1)
                 }
             }
-            val initialDelayMs = nextMidnight.timeInMillis - now.timeInMillis
+            val initialDelayMs = nextSevenAm.timeInMillis - now.timeInMillis
 
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -101,7 +101,7 @@ class DriveBackupWorker(
                 ExistingPeriodicWorkPolicy.UPDATE,
                 periodicRequest
             )
-            Log.d(TAG, "Backup periódico automático agendado para após as 00:00 horas (delay inicial: ${initialDelayMs / 1000}s) no modo completo.")
+            Log.d(TAG, "Backup periódico automático agendado para as 07:00 da manhã (delay inicial: ${initialDelayMs / 1000}s) no modo completo.")
         }
 
         fun triggerImmediateWork(context: Context) {
