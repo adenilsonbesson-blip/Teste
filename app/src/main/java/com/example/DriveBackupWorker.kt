@@ -63,45 +63,59 @@ class DriveBackupWorker(
 
             if (!isAutoEnabled) {
                 workManager.cancelUniqueWork(WORK_NAME_PERIODIC)
-                Log.d(TAG, "Backup periódico desativado e cancelado no WorkManager.")
+                Log.d(TAG, "Backup automático desativado e cancelado no WorkManager.")
                 return
             }
 
-            // O backup automático sempre fará o backup completo
             prefs.edit().putString(PREF_BACKUP_MODE, "completo").apply()
+            scheduleNextBackup(context)
+        }
 
-            // O agendamento automático foi alterado para as 07:00 da manhã
+        fun scheduleNextBackup(context: Context) {
             val now = java.util.Calendar.getInstance()
-            val nextSevenAm = java.util.Calendar.getInstance().apply {
+
+            val target7am = java.util.Calendar.getInstance().apply {
                 set(java.util.Calendar.HOUR_OF_DAY, 7)
                 set(java.util.Calendar.MINUTE, 0)
                 set(java.util.Calendar.SECOND, 0)
                 set(java.util.Calendar.MILLISECOND, 0)
-                if (before(now)) {
-                    add(java.util.Calendar.DAY_OF_MONTH, 1)
+            }
+
+            val target17pm = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.HOUR_OF_DAY, 17)
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }
+
+            val nextTarget = when {
+                now.before(target7am) -> target7am
+                now.before(target17pm) -> target17pm
+                else -> {
+                    target7am.add(java.util.Calendar.DAY_OF_MONTH, 1)
+                    target7am
                 }
             }
-            val initialDelayMs = nextSevenAm.timeInMillis - now.timeInMillis
+
+            val initialDelayMs = nextTarget.timeInMillis - now.timeInMillis
 
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
 
-            val periodicRequest = PeriodicWorkRequestBuilder<DriveBackupWorker>(
-                24L, TimeUnit.HOURS
-            )
+            val workRequest = OneTimeWorkRequestBuilder<DriveBackupWorker>()
                 .setConstraints(constraints)
                 .setInitialDelay(initialDelayMs, TimeUnit.MILLISECONDS)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
                 .addTag(TAG)
                 .build()
 
-            workManager.enqueueUniquePeriodicWork(
+            WorkManager.getInstance(context).enqueueUniqueWork(
                 WORK_NAME_PERIODIC,
-                ExistingPeriodicWorkPolicy.UPDATE,
-                periodicRequest
+                ExistingWorkPolicy.REPLACE,
+                workRequest
             )
-            Log.d(TAG, "Backup periódico automático agendado para as 07:00 da manhã (delay inicial: ${initialDelayMs / 1000}s) no modo completo.")
+            Log.d(TAG, "Próximo backup automático agendado para: ${SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(nextTarget.time)} (daqui a ${initialDelayMs / 1000}s).")
         }
 
         fun triggerImmediateWork(context: Context) {
@@ -169,7 +183,8 @@ class DriveBackupWorker(
             val backupFileName = "Backup,$dataStr,$horaStr,$deviceName.db"
 
             val cachedBackup = File(applicationContext.cacheDir, backupFileName)
-            prepareDbForMode(dbFile, cachedBackup, mode)
+            // O backup automático sempre exporta o banco de dados original completo, sem filtros
+            dbFile.copyTo(cachedBackup, overwrite = true)
 
             // 2. Grava na pasta Downloads/backupcond
             val savedLocations = mutableListOf<String>()
@@ -236,6 +251,7 @@ class DriveBackupWorker(
                 } else {
                     driveStatusMsg = " | ☁️ Google Drive: Aguardando Internet"
                     prefs.edit().putString(PREF_LAST_DRIVE_STATUS, "Aguardando Conexão").apply()
+                    return Result.retry()
                 }
             } else {
                 driveStatusMsg = " | ☁️ Google Drive: portcentral85@gmail.com (pasta backup)"
@@ -255,6 +271,7 @@ class DriveBackupWorker(
                 .apply()
 
             Log.d(TAG, "WorkManager finalizou backup com sucesso: $finalStatus")
+            scheduleNextBackup(applicationContext)
             return Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Exceção ao executar backup no WorkManager: ${e.message}", e)
