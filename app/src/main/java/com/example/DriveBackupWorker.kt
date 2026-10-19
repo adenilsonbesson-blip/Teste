@@ -56,66 +56,86 @@ class DriveBackupWorker(
             return combined.replace(Regex("[^a-zA-Z0-9 _-]"), "").trim().ifEmpty { "Aparelho" }
         }
 
+        const val WORK_NAME_MORNING = "condo_drive_backup_morning"
+        const val WORK_NAME_EVENING = "condo_drive_backup_evening"
+
         fun scheduleOrCancel(context: Context) {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val isAutoEnabled = prefs.getBoolean(PREF_AUTO_BACKUP_ENABLED, true)
             val workManager = WorkManager.getInstance(context)
 
             if (!isAutoEnabled) {
+                workManager.cancelUniqueWork(WORK_NAME_MORNING)
+                workManager.cancelUniqueWork(WORK_NAME_EVENING)
                 workManager.cancelUniqueWork(WORK_NAME_PERIODIC)
+                workManager.cancelUniqueWork(WORK_NAME_ONE_TIME)
                 Log.d(TAG, "Backup automático desativado e cancelado no WorkManager.")
                 return
             }
 
             prefs.edit().putString(PREF_BACKUP_MODE, "completo").apply()
-            scheduleNextBackup(context)
-        }
 
-        fun scheduleNextBackup(context: Context) {
             val now = java.util.Calendar.getInstance()
 
+            // 1. Manhã: 07:00
             val target7am = java.util.Calendar.getInstance().apply {
                 set(java.util.Calendar.HOUR_OF_DAY, 7)
                 set(java.util.Calendar.MINUTE, 0)
                 set(java.util.Calendar.SECOND, 0)
                 set(java.util.Calendar.MILLISECOND, 0)
-            }
-
-            val target17pm = java.util.Calendar.getInstance().apply {
-                set(java.util.Calendar.HOUR_OF_DAY, 17)
-                set(java.util.Calendar.MINUTE, 0)
-                set(java.util.Calendar.SECOND, 0)
-                set(java.util.Calendar.MILLISECOND, 0)
-            }
-
-            val nextTarget = when {
-                now.before(target7am) -> target7am
-                now.before(target17pm) -> target17pm
-                else -> {
-                    target7am.add(java.util.Calendar.DAY_OF_MONTH, 1)
-                    target7am
+                if (before(now)) {
+                    add(java.util.Calendar.DAY_OF_MONTH, 1)
                 }
             }
-
-            val initialDelayMs = nextTarget.timeInMillis - now.timeInMillis
+            val delay7am = target7am.timeInMillis - now.timeInMillis
 
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
 
-            val workRequest = OneTimeWorkRequestBuilder<DriveBackupWorker>()
+            val morningRequest = PeriodicWorkRequestBuilder<DriveBackupWorker>(
+                24L, TimeUnit.HOURS
+            )
                 .setConstraints(constraints)
-                .setInitialDelay(initialDelayMs, TimeUnit.MILLISECONDS)
+                .setInitialDelay(delay7am, TimeUnit.MILLISECONDS)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
                 .addTag(TAG)
                 .build()
 
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                WORK_NAME_PERIODIC,
-                ExistingWorkPolicy.REPLACE,
-                workRequest
+            workManager.enqueueUniquePeriodicWork(
+                WORK_NAME_MORNING,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                morningRequest
             )
-            Log.d(TAG, "Próximo backup automático agendado para: ${SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(nextTarget.time)} (daqui a ${initialDelayMs / 1000}s).")
+
+            // 2. Tarde: 17:00 (5 PM)
+            val target17pm = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.HOUR_OF_DAY, 17)
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+                if (before(now)) {
+                    add(java.util.Calendar.DAY_OF_MONTH, 1)
+                }
+            }
+            val delay17pm = target17pm.timeInMillis - now.timeInMillis
+
+            val eveningRequest = PeriodicWorkRequestBuilder<DriveBackupWorker>(
+                24L, TimeUnit.HOURS
+            )
+                .setConstraints(constraints)
+                .setInitialDelay(delay17pm, TimeUnit.MILLISECONDS)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
+                .addTag(TAG)
+                .build()
+
+            workManager.enqueueUniquePeriodicWork(
+                WORK_NAME_EVENING,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                eveningRequest
+            )
+
+            Log.d(TAG, "Backups automáticos agendados para 07:00 (delay: ${delay7am / 1000}s) e 17:00 (delay: ${delay17pm / 1000}s).")
         }
 
         fun triggerImmediateWork(context: Context) {
@@ -271,7 +291,6 @@ class DriveBackupWorker(
                 .apply()
 
             Log.d(TAG, "WorkManager finalizou backup com sucesso: $finalStatus")
-            scheduleNextBackup(applicationContext)
             return Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Exceção ao executar backup no WorkManager: ${e.message}", e)
