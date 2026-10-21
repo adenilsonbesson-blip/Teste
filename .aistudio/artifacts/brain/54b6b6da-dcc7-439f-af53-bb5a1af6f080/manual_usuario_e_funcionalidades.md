@@ -46,6 +46,6 @@ Este documento apresenta a documentação completa de todas as telas, fluxos ope
 * **Objetivo:** Gerenciar a segurança, dados e cópias de segurança do sistema.
 * **Principais Funções:**
   * **Exportação Manual de Backup:** Geração de arquivo de backup completo (`.db`) armazenado na pasta pública do dispositivo.
-  * **Backup Automático Diário (07:00):** Rotina executada em segundo plano via WorkManager (funciona com o app fechado) para salvamento diário e envio opcional via webhook para o Google Drive.
+  * **Backup Automático Diário (07:00 e 17:00):** Rotina executada em segundo plano via WorkManager (funciona mesmo com o app fechado) 2 vezes ao dia (às 07:00 e às 17:00) para salvamento diário do banco original (.db) em Downloads/backupcond e envio para o Google Drive.
   * **Tabela de Gerenciamento de Backups:** Listagem de arquivos de backup anteriores com dados de data, hora, tamanho e botão de restauração compacto.
   * **Exclusão Seletiva de Encomendas:** Opção protegida por senha de administrador para limpar o histórico de entregas mantendo 100% preservados os cadastros de moradores, porteiros e entregadores.

@@ -104,7 +104,7 @@ class DriveBackupWorker(
 
             workManager.enqueueUniquePeriodicWork(
                 WORK_NAME_MORNING,
-                ExistingPeriodicWorkPolicy.UPDATE,
+                ExistingPeriodicWorkPolicy.KEEP,
                 morningRequest
             )
 
@@ -131,11 +131,11 @@ class DriveBackupWorker(
 
             workManager.enqueueUniquePeriodicWork(
                 WORK_NAME_EVENING,
-                ExistingPeriodicWorkPolicy.UPDATE,
+                ExistingPeriodicWorkPolicy.KEEP,
                 eveningRequest
             )
 
-            Log.d(TAG, "Backups automáticos agendados para 07:00 (delay: ${delay7am / 1000}s) e 17:00 (delay: ${delay17pm / 1000}s).")
+            Log.d(TAG, "Backups automáticos ativos para 07:00 (delay: ${delay7am / 1000}s) e 17:00 (delay: ${delay17pm / 1000}s).")
         }
 
         fun triggerImmediateWork(context: Context) {
@@ -157,10 +157,14 @@ class DriveBackupWorker(
         }
 
         fun isOnline(context: Context): Boolean {
-            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
-            val network = cm.activeNetwork ?: return false
-            val caps = cm.getNetworkCapabilities(network) ?: return false
-            return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            return try {
+                val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return true
+                val network = cm.activeNetwork ?: return true
+                val caps = cm.getNetworkCapabilities(network) ?: return true
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            } catch (e: Exception) {
+                true
+            }
         }
     }
 

@@ -1893,13 +1893,52 @@ class AndroidDriveInterface(
     @JavascriptInterface
     fun getDriveSyncConfig(): String {
         val obj = JSONObject()
-        obj.put("autoBackupEnabled", prefs.getBoolean(PREF_AUTO_BACKUP_ENABLED, false))
+        obj.put("autoBackupEnabled", prefs.getBoolean(PREF_AUTO_BACKUP_ENABLED, true))
         obj.put("backupMode", prefs.getString(PREF_BACKUP_MODE, "completo") ?: "completo")
         obj.put("backupFrequency", prefs.getString(PREF_BACKUP_FREQUENCY, "diario") ?: "diario")
         obj.put("lastSyncTime", prefs.getString(PREF_LAST_SYNC_TIME, "Nunca sincronizado") ?: "Nunca sincronizado")
         obj.put("lastSyncStatus", prefs.getString(PREF_LAST_SYNC_STATUS, "Inativo") ?: "Inativo")
         obj.put("scriptWebhookUrl", prefs.getString(PREF_SCRIPT_URL, DriveBackupWorker.DEFAULT_WEBHOOK_URL) ?: DriveBackupWorker.DEFAULT_WEBHOOK_URL)
         obj.put("isConnected", isConnectedToInternet())
+        return obj.toString()
+    }
+
+    @JavascriptInterface
+    fun getAutomaticBackupDiagnostics(): String {
+        val obj = JSONObject()
+        val isAutoEnabled = prefs.getBoolean(PREF_AUTO_BACKUP_ENABLED, true)
+        obj.put("autoBackupEnabled", isAutoEnabled)
+        obj.put("scheduledTimes", "07:00 e 17:00")
+        obj.put("lastSyncTime", prefs.getString(PREF_LAST_SYNC_TIME, "Aguardando primeiro disparo"))
+        obj.put("lastSyncStatus", prefs.getString(PREF_LAST_SYNC_STATUS, "Ativo e Programado"))
+        obj.put("lastDriveStatus", prefs.getString(DriveBackupWorker.PREF_LAST_DRIVE_STATUS, "Pronto"))
+        obj.put("webhookConfigured", !prefs.getString(PREF_SCRIPT_URL, "").isNullOrBlank())
+
+        val now = java.util.Calendar.getInstance()
+        val target7am = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 7)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val target17pm = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 17)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val nextTarget = when {
+            now.before(target7am) -> "Hoje às 07:00"
+            now.before(target17pm) -> "Hoje às 17:00"
+            else -> "Amanhã às 07:00"
+        }
+        obj.put("nextScheduledRun", nextTarget)
+        obj.put("isOnline", DriveBackupWorker.isOnline(context))
+
+        val dbFile = context.getDatabasePath("entregas.db")
+        obj.put("dbExists", dbFile.exists())
+        obj.put("dbSizeBytes", if (dbFile.exists()) dbFile.length() else 0L)
+
         return obj.toString()
     }
 
@@ -1973,9 +2012,9 @@ class AndroidDriveInterface(
                 val deviceName = DriveBackupWorker.getBackupDeviceName(context)
                 val backupFileName = "Backup,$dataStr,$horaStr,$deviceName.db"
 
-                // Create local copy in app cache for upload with mode filter
                 val cachedBackup = File(context.cacheDir, backupFileName)
-                prepareDbForMode(dbFile, cachedBackup, mode)
+                // Copia diretamente o banco original completo sem filtros
+                dbFile.copyTo(cachedBackup, overwrite = true)
 
                 // Save strictly in Downloads/backupcond
                 val savedLocations = mutableListOf<String>()

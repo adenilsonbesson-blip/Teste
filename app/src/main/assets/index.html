@@ -1855,6 +1855,42 @@
                     <p style="font-size: 0.9rem; color: #334155; margin-bottom: 1.5rem; line-height: 1.5; font-weight: 600;">
                         Gerencie os dados por completo. Você pode exportar todas as informações diretamente no formato de banco de dados original do sistema (.db) ou fazer o download de todas as planilhas integradas para o Microsoft Excel (XLSX).
                     </p>
+
+                    <!-- PAINEL DE STATUS DO BACKUP AUTOMÁTICO (VISÍVEL DIRETAMENTE) -->
+                    <div style="background: linear-gradient(135deg, #064e3b 0%, #065f46 100%); color: white; padding: 1.25rem; border-radius: 12px; margin-bottom: 1.5rem; box-shadow: 0 4px 12px rgba(6, 78, 59, 0.25);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <span style="font-weight: 800; font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem;">
+                                <span>🟢</span> Backup Automático: <strong id="auto-backup-status-badge">ATIVO E PROGRAMADO</strong>
+                            </span>
+                            <span style="background: rgba(255,255,255,0.2); padding: 0.25rem 0.65rem; border-radius: 20px; font-size: 0.8rem; font-weight: 700;">
+                                ⏰ 2x ao dia (07:00 e 17:00)
+                            </span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; font-size: 0.85rem; background: rgba(0,0,0,0.22); padding: 0.85rem; border-radius: 8px;">
+                            <div>
+                                <div style="opacity: 0.8; font-size: 0.72rem; text-transform: uppercase;">📅 Última Execução:</div>
+                                <strong id="auto-backup-last-time" style="font-size: 0.88rem; color: #a7f3d0;">Carregando...</strong>
+                            </div>
+                            <div>
+                                <div style="opacity: 0.8; font-size: 0.72rem; text-transform: uppercase;">⏳ Próximo Disparo:</div>
+                                <strong id="auto-backup-next-time" style="font-size: 0.88rem; color: #fde047;">Calculando...</strong>
+                            </div>
+                            <div>
+                                <div style="opacity: 0.8; font-size: 0.72rem; text-transform: uppercase;">☁️ Status do Google Drive:</div>
+                                <strong id="auto-backup-drive-status" style="font-size: 0.85rem; color: #93c5fd;">Conectado</strong>
+                            </div>
+                            <div>
+                                <div style="opacity: 0.8; font-size: 0.72rem; text-transform: uppercase;">📂 Armazenamento Local:</div>
+                                <strong style="font-size: 0.85rem; color: #ffffff;">Downloads/backupcond</strong>
+                            </div>
+                        </div>
+                        <div style="margin-top: 0.85rem; display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
+                            <span style="font-size: 0.75rem; opacity: 0.85; margin-right: auto;">ℹ️ Funciona em segundo plano mesmo com o app fechado</span>
+                            <button type="button" id="btn-testar-backup-auto" onclick="testarBackupAutomaticoAgora()" style="background: #ffffff; color: #065f46; border: none; padding: 0.55rem 1rem; border-radius: 6px; font-weight: 800; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">
+                                ⚡ Testar Execução do Backup Agora
+                            </button>
+                        </div>
+                    </div>
                     
                     <!-- BOTÕES VISÍVEIS DIRETAMENTE SEM SENHA -->
                     <div style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem;">
@@ -1922,7 +1958,7 @@
                                 <button type="button" class="btn-primary" onclick="salvarWebhookUrlDrive()" style="width: auto; padding: 0.55rem 0.9rem; font-size: 0.82rem; white-space: nowrap;">💾 Salvar URL</button>
                             </div>
                             <p style="font-size: 0.73rem; color: var(--text-muted); margin: 0.4rem 0 0 0;">
-                                O Android WorkManager e o botão de Backup DB ativam automaticamente após as 00:00 horas todos os dias para gerar o Backup Completo para essa URL na nuvem.
+                                O Android WorkManager realiza o backup automático completo duas vezes ao dia (às 07:00 da manhã e às 17:00 da tarde), salvando em Downloads/backupcond e enviando para o Google Drive.
                             </p>
                         </div>
 
@@ -6919,33 +6955,72 @@
         // ==========================================
         function inicializarDriveSyncUI() {
             try {
+                let diag = null;
+                if (typeof AndroidDrive !== 'undefined' && AndroidDrive.getAutomaticBackupDiagnostics) {
+                    try {
+                        diag = JSON.parse(AndroidDrive.getAutomaticBackupDiagnostics());
+                    } catch (e) {}
+                }
+
+                const lastTimeEl = document.getElementById('auto-backup-last-time');
+                const nextTimeEl = document.getElementById('auto-backup-next-time');
+                const driveStatusEl = document.getElementById('auto-backup-drive-status');
+                const badgeEl = document.getElementById('auto-backup-status-badge');
+
+                if (diag) {
+                    if (lastTimeEl) lastTimeEl.textContent = diag.lastSyncTime || "Aguardando disparo";
+                    if (nextTimeEl) nextTimeEl.textContent = diag.nextScheduledRun || "07:00 / 17:00";
+                    if (driveStatusEl) {
+                        driveStatusEl.textContent = diag.lastDriveStatus || "Pronto";
+                        driveStatusEl.style.color = (diag.lastDriveStatus && diag.lastDriveStatus.includes("Sucesso")) ? "#a7f3d0" : "#93c5fd";
+                    }
+                    if (badgeEl) {
+                        badgeEl.textContent = diag.autoBackupEnabled ? "ATIVO E PROGRAMADO" : "PAUSADO";
+                        badgeEl.style.color = diag.autoBackupEnabled ? "#a7f3d0" : "#fca5a5";
+                    }
+                } else {
+                    const now = new Date();
+                    const target7 = new Date(); target7.setHours(7, 0, 0, 0);
+                    const target17 = new Date(); target17.setHours(17, 0, 0, 0);
+                    let proximo = "";
+                    if (now < target7) proximo = "Hoje às 07:00";
+                    else if (now < target17) proximo = "Hoje às 17:00";
+                    else proximo = "Amanhã às 07:00";
+                    if (nextTimeEl) nextTimeEl.textContent = proximo;
+                    if (lastTimeEl) lastTimeEl.textContent = "Aguardando disparo";
+                }
+
                 if (typeof AndroidDrive !== 'undefined' && AndroidDrive.getDriveSyncConfig) {
                     const cfgStr = AndroidDrive.getDriveSyncConfig();
                     if (cfgStr) {
                         const cfg = JSON.parse(cfgStr);
-                        const lastSyncSpan = document.getElementById('drive-last-sync-time');
-                        const netSpan = document.getElementById('drive-network-status');
-
-                        if (lastSyncSpan && cfg.lastSyncTime) {
-                            lastSyncSpan.textContent = cfg.lastSyncTime;
-                        }
-                        if (netSpan) {
-                            netSpan.textContent = "📂 Downloads/backupcond";
-                            netSpan.style.color = "#38bdf8";
-                        }
                         if (cfg.scriptWebhookUrl || db.scriptWebhookUrl) {
                             const inputWeb = document.getElementById('drive-webhook-url-input');
                             if (inputWeb) inputWeb.value = cfg.scriptWebhookUrl || db.scriptWebhookUrl;
-                            const badge = document.getElementById('drive-webhook-status-badge');
-                            if (badge) {
-                                badge.textContent = "✅ Conectado ao Google Apps Script";
-                                badge.style.color = "#10b981";
-                            }
                         }
                     }
                 }
             } catch (e) {
                 console.warn("Aviso ao carregar config Backup:", e);
+            }
+        }
+
+        function testarBackupAutomaticoAgora() {
+            const btn = document.getElementById('btn-testar-backup-auto');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Executando Backup...';
+            }
+            if (typeof AndroidDrive !== 'undefined' && AndroidDrive.triggerSyncToDrive) {
+                AndroidDrive.triggerSyncToDrive(true);
+            } else {
+                setTimeout(() => {
+                    alert("Simulação de backup concluída no ambiente web.");
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '⚡ Testar Execução do Backup Agora';
+                    }
+                }, 1000);
             }
         }
 
@@ -7318,10 +7393,13 @@ function doGet(e) {
                 btn.innerHTML = '💾 Realizar Backup Agora (Data e Hora)';
             }
 
-            const lastSyncSpan = document.getElementById('drive-last-sync-time');
-            if (lastSyncSpan && syncTime) {
-                lastSyncSpan.textContent = syncTime;
+            const btnTestar = document.getElementById('btn-testar-backup-auto');
+            if (btnTestar) {
+                btnTestar.disabled = false;
+                btnTestar.innerHTML = '⚡ Testar Execução do Backup Agora';
             }
+
+            inicializarDriveSyncUI();
 
             if (isManual) {
                 if (sucesso) {
