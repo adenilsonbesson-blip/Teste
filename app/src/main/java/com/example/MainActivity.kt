@@ -1632,42 +1632,83 @@ class AndroidDBInterface(
 
         // 6. Encomendas
         val currEncomendas = if (result.has("encomendas")) result.getJSONArray("encomendas") else org.json.JSONArray()
-        val encomendaMap = HashMap<String, Int>()
+        var substituidasBaixaEnc = 0
         var maxId = 1000
+
+        val rastreioToIdx = HashMap<String, Int>()
+        val idToIdx = HashMap<Int, Int>()
+        val compositeToIdx = HashMap<String, Int>()
+
         for (i in 0 until currEncomendas.length()) {
             val enc = currEncomendas.getJSONObject(i)
             val id = enc.optInt("id", 0)
             if (id > maxId) maxId = id
+            if (id > 0) idToIdx[id] = i
+
             val rastreio = enc.optString("rastreio", "").trim().uppercase()
+            if (rastreio.isNotEmpty()) {
+                rastreioToIdx[rastreio] = i
+            }
+
             val bloco = enc.optString("bloco", "").trim().uppercase()
             val apto = enc.optString("apto", "").trim()
-            val key = if (rastreio.isNotEmpty()) {
-                "RASTREIO:${rastreio}|${bloco}|${apto}"
-            } else {
-                "COMP:${enc.optString("dataEntrada", "")}|${enc.optString("horaEntrada", "")}|${bloco}|${apto}|${enc.optString("morador", "").trim().lowercase()}"
+            val dtEnt = enc.optString("dataEntrada", "").trim()
+            val hrEnt = enc.optString("horaEntrada", "").trim()
+            val compKey = "$dtEnt|$hrEnt|$bloco|$apto"
+            if (compKey.length > 5) {
+                compositeToIdx[compKey] = i
             }
-            encomendaMap[key] = i
         }
+
+        fun hasBaixa(e: org.json.JSONObject): Boolean {
+            val st = e.optString("status", "").trim()
+            val isEntregue = st.equals("Entregue", ignoreCase = true)
+            val hasEntregueBool = e.optBoolean("entregue", false)
+            val hasData = e.optString("dataEntrega", "").trim().isNotEmpty()
+            val hasHora = e.optString("horaEntrega", "").trim().isNotEmpty()
+            val hasPorteiro = e.optString("porteiroEntrega", "").trim().isNotEmpty()
+            val hasAssinatura = e.optString("assinaturaRaw", "").trim().isNotEmpty()
+            val hasRecebedor = e.optString("recebedor", "").trim().isNotEmpty()
+            val hasMoradorRet = e.optString("moradorRetirou", "").trim().isNotEmpty()
+            return isEntregue || hasEntregueBool || hasData || hasHora || hasPorteiro || hasAssinatura || hasRecebedor || hasMoradorRet
+        }
+
+        fun isPendente(e: org.json.JSONObject): Boolean {
+            return !hasBaixa(e)
+        }
+
         if (incoming.has("encomendas")) {
             val inEncomendas = incoming.getJSONArray("encomendas")
             for (i in 0 until inEncomendas.length()) {
                 totalEnc++
                 val enc = inEncomendas.getJSONObject(i)
-                val rastreio = enc.optString("rastreio", "").trim().uppercase()
-                val bloco = enc.optString("bloco", "").trim().uppercase()
-                val apto = enc.optString("apto", "").trim()
-                val key = if (rastreio.isNotEmpty()) {
-                    "RASTREIO:${rastreio}|${bloco}|${apto}"
-                } else {
-                    "COMP:${enc.optString("dataEntrada", "")}|${enc.optString("horaEntrada", "")}|${bloco}|${apto}|${enc.optString("morador", "").trim().lowercase()}"
+                val inRastreio = enc.optString("rastreio", "").trim().uppercase()
+                val inId = enc.optInt("id", 0)
+                val inBloco = enc.optString("bloco", "").trim().uppercase()
+                val inApto = enc.optString("apto", "").trim()
+                val inDtEnt = enc.optString("dataEntrada", "").trim()
+                val inHrEnt = enc.optString("horaEntrada", "").trim()
+                val inCompKey = "$inDtEnt|$inHrEnt|$inBloco|$inApto"
+
+                var matchIdx: Int? = null
+                if (inRastreio.isNotEmpty() && rastreioToIdx.containsKey(inRastreio)) {
+                    matchIdx = rastreioToIdx[inRastreio]
+                } else if (inId > 0 && idToIdx.containsKey(inId)) {
+                    matchIdx = idToIdx[inId]
+                } else if (inCompKey.length > 5 && compositeToIdx.containsKey(inCompKey)) {
+                    matchIdx = compositeToIdx[inCompKey]
                 }
-                
-                if (!encomendaMap.containsKey(key)) {
-                    encomendaMap[key] = currEncomendas.length()
+
+                if (matchIdx == null) {
                     maxId++
                     enc.put("id", maxId)
+                    val newIdx = currEncomendas.length()
                     currEncomendas.put(enc)
                     addEnc++
+
+                    if (inRastreio.isNotEmpty()) rastreioToIdx[inRastreio] = newIdx
+                    idToIdx[maxId] = newIdx
+                    if (inCompKey.length > 5) compositeToIdx[inCompKey] = newIdx
 
                     val plat = enc.optString("plataforma", "").trim()
                     if (plat.isNotEmpty() && !platKeys.contains(plat.lowercase())) {
@@ -1676,29 +1717,49 @@ class AndroidDBInterface(
                         addPlat++
                     }
                 } else {
-                    val existingIdx = encomendaMap[key]!!
-                    val existingEnc = currEncomendas.getJSONObject(existingIdx)
-                    val existingStatus = existingEnc.optString("status", "Recebido")
-                    val incomingStatus = enc.optString("status", "Recebido")
-                    val isExistingDelivered = existingStatus.equals("Entregue", ignoreCase = true)
-                    val isIncomingDelivered = incomingStatus.equals("Entregue", ignoreCase = true) || enc.optBoolean("entregue", false)
+                    val existingEnc = currEncomendas.getJSONObject(matchIdx)
+                    val existingPendente = isPendente(existingEnc)
+                    val incomingComBaixa = hasBaixa(enc)
 
-                    if (!isExistingDelivered && isIncomingDelivered) {
+                    if (existingPendente && incomingComBaixa) {
+                        // Se antes de importar o backup estiver como pendente de baixa
+                        // e o registro importado estiver já com a baixa, substitua!
+                        val existingId = existingEnc.optInt("id", if (inId > 0) inId else maxId)
+                        val keys = enc.keys()
+                        while (keys.hasNext()) {
+                            val k = keys.next()
+                            if (k != "id") {
+                                existingEnc.put(k, enc.get(k))
+                            }
+                        }
+                        existingEnc.put("id", existingId)
                         existingEnc.put("status", "Entregue")
-                        existingEnc.put("dataEntrega", enc.optString("dataEntrega", ""))
-                        existingEnc.put("horaEntrega", enc.optString("horaEntrega", ""))
-                        existingEnc.put("porteiroEntrega", enc.optString("porteiroEntrega", ""))
-                        existingEnc.put("assinaturaRaw", enc.optString("assinaturaRaw", ""))
-                        if (enc.has("moradorRetirou") && enc.optString("moradorRetirou").isNotEmpty()) {
+                        existingEnc.put("entregue", true)
+
+                        if (existingEnc.optString("dataEntrega", "").isBlank()) {
+                            val todayIso = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                            existingEnc.put("dataEntrega", todayIso)
+                        }
+                        if (existingEnc.optString("horaEntrega", "").isBlank()) {
+                            val nowTime = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                            existingEnc.put("horaEntrega", nowTime)
+                        }
+
+                        currEncomendas.put(matchIdx, existingEnc)
+                        substituidasBaixaEnc++
+                        addEnc++
+                    } else if (!existingPendente && incomingComBaixa) {
+                        // Ambos já possuem baixa, mescla detalhes extras caso falte na atual
+                        if (existingEnc.optString("assinaturaRaw", "").isBlank() && enc.optString("assinaturaRaw", "").isNotBlank()) {
+                            existingEnc.put("assinaturaRaw", enc.optString("assinaturaRaw"))
+                        }
+                        if (existingEnc.optString("porteiroEntrega", "").isBlank() && enc.optString("porteiroEntrega", "").isNotBlank()) {
+                            existingEnc.put("porteiroEntrega", enc.optString("porteiroEntrega"))
+                        }
+                        if (existingEnc.optString("moradorRetirou", "").isBlank() && enc.optString("moradorRetirou", "").isNotBlank()) {
                             existingEnc.put("moradorRetirou", enc.optString("moradorRetirou"))
                         }
-                        if (enc.has("recebedor") && enc.optString("recebedor").isNotEmpty()) {
-                            existingEnc.put("recebedor", enc.optString("recebedor"))
-                        }
-                        if (enc.has("entregue")) {
-                            existingEnc.put("entregue", true)
-                        }
-                        addEnc++
+                        skipEnc++
                     } else {
                         skipEnc++
                     }
@@ -1740,6 +1801,7 @@ class AndroidDBInterface(
             put("encomendas", org.json.JSONObject().apply {
                 put("analisados", totalEnc)
                 put("adicionadas", addEnc)
+                put("substituidasBaixa", substituidasBaixaEnc)
                 put("ignoradas", skipEnc)
             })
         }

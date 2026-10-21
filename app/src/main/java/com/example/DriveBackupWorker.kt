@@ -104,7 +104,7 @@ class DriveBackupWorker(
 
             workManager.enqueueUniquePeriodicWork(
                 WORK_NAME_MORNING,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.UPDATE,
                 morningRequest
             )
 
@@ -131,7 +131,7 @@ class DriveBackupWorker(
 
             workManager.enqueueUniquePeriodicWork(
                 WORK_NAME_EVENING,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.UPDATE,
                 eveningRequest
             )
 

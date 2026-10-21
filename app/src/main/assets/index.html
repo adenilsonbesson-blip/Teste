@@ -6452,7 +6452,7 @@
                             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #e2e8f0; padding-bottom: 0.4rem;">
                                 <span style="font-weight: 800; color: #1e293b !important;">📦 Encomendas:</span>
                                 <span style="font-weight: 900; color: #15803d !important;">
-                                    +${rep.encomendas?.adicionadas || 0} novas <span style="color: #64748b; font-weight: 700;">(${rep.encomendas?.ignoradas || 0} ignoradas)</span>
+                                    +${rep.encomendas?.adicionadas || 0} novas ${rep.encomendas?.substituidasBaixa ? `<span style="color: #0284c7; font-weight: 800;">(${rep.encomendas.substituidasBaixa} baixas atualizadas)</span> ` : ''}<span style="color: #64748b; font-weight: 700;">(${rep.encomendas?.ignoradas || 0} ignoradas)</span>
                                 </span>
                             </div>
 
@@ -6525,7 +6525,7 @@
                 titulo: 'IMPORTAR BACKUP',
                 subtitulo: fileName,
                 icone: '📥',
-                mensagem: `Deseja importar o banco de dados do arquivo selecionado?\n\n📄 Arquivo: ${fileName}\n📍 Local: ${filePath}\n\nℹ️ Os registros existentes serão PRESERVADOS (não serão substituídos) e os novos registros de Moradores, Porteiros, Entregadores, Plataformas e Encomendas serão adicionados ao sistema.`,
+                mensagem: `Deseja importar o banco de dados do arquivo selecionado?\n\n📄 Arquivo: ${fileName}\n📍 Local: ${filePath}\n\nℹ️ Os registros existentes serão preservados e complementados. Caso alguma encomenda esteja pendente no sistema e já conste com baixa concluída no backup, a baixa será atualizada e substituída automaticamente.`,
                 botaoConfirmar: 'Sim, Importar Dados',
                 botaoCancelar: 'Cancelar',
                 onConfirm: () => {
@@ -6762,12 +6762,29 @@
             // 6. Encomendas
             if (Array.isArray(parsed.encomendas)) {
                 let maxId = db.encomendas.reduce((max, cur) => (cur.id && cur.id > max) ? cur.id : max, 1000);
+                if (!report.encomendas.substituidasBaixa) report.encomendas.substituidasBaixa = 0;
+
+                const hasBaixaJs = (e) => {
+                    if (!e) return false;
+                    const st = (e.status || '').toString().trim().toLowerCase();
+                    return st === 'entregue' || 
+                           Boolean(e.entregue) || 
+                           Boolean(e.dataEntrega && e.dataEntrega.trim()) || 
+                           Boolean(e.horaEntrega && e.horaEntrega.trim()) || 
+                           Boolean(e.porteiroEntrega && e.porteiroEntrega.trim()) || 
+                           Boolean(e.assinaturaRaw && e.assinaturaRaw.trim()) || 
+                           Boolean(e.moradorRetirou && e.moradorRetirou.trim()) || 
+                           Boolean(e.recebedor && e.recebedor.trim());
+                };
+
+                const isPendenteJs = (e) => !hasBaixaJs(e);
 
                 parsed.encomendas.forEach(enc => {
                     report.encomendas.analisadas++;
                     report.totalAnalisados++;
 
                     const rastreioFmt = (enc.rastreio || '').trim().toUpperCase();
+                    const inId = enc.id ? parseInt(enc.id) : 0;
                     const dataEnt = (enc.dataEntrada || '').trim();
                     const horaEnt = (enc.horaEntrada || '').trim();
                     const blocoFmt = (enc.bloco || '').trim().toUpperCase();
@@ -6775,28 +6792,31 @@
                     const moradorFmt = formatarNomeIniciaisMaisculoMinisculo((enc.morador || '').trim());
                     const platFmt = formatarNomeIniciaisMaisculoMinisculo((enc.plataforma || '').trim());
 
-                    let jaExiste = false;
+                    let existingIndex = -1;
 
+                    // 1. Busca por código de rastreio
                     if (rastreioFmt) {
-                        jaExiste = db.encomendas.some(e => 
-                            (e.rastreio || '').trim().toUpperCase() === rastreioFmt &&
-                            (e.bloco || '').trim().toUpperCase() === blocoFmt &&
-                            (e.apto || '').trim() === aptoFmt
+                        existingIndex = db.encomendas.findIndex(e => 
+                            (e.rastreio || '').trim().toUpperCase() === rastreioFmt
                         );
                     }
 
-                    if (!jaExiste) {
-                        jaExiste = db.encomendas.some(e => 
+                    // 2. Busca por ID numérico
+                    if (existingIndex === -1 && inId > 0) {
+                        existingIndex = db.encomendas.findIndex(e => e.id === inId);
+                    }
+
+                    // 3. Busca por dados compostos (caso não haja rastreio)
+                    if (existingIndex === -1) {
+                        existingIndex = db.encomendas.findIndex(e => 
                             norm(e.dataEntrada) === norm(dataEnt) &&
                             norm(e.horaEntrada) === norm(horaEnt) &&
                             norm(e.bloco) === norm(blocoFmt) &&
-                            norm(e.apto) === norm(aptoFmt) &&
-                            norm(e.morador) === norm(moradorFmt) &&
-                            norm(e.plataforma) === norm(platFmt)
+                            norm(e.apto) === norm(aptoFmt)
                         );
                     }
 
-                    if (!jaExiste) {
+                    if (existingIndex === -1) {
                         maxId++;
                         const novoItem = {
                             id: maxId,
@@ -6826,8 +6846,35 @@
                         report.encomendas.adicionadas++;
                         report.totalAdicionados++;
                     } else {
-                        report.encomendas.ignoradas++;
-                        report.totalIgnorados++;
+                        const existingEnc = db.encomendas[existingIndex];
+                        const existingPendente = isPendenteJs(existingEnc);
+                        const incomingComBaixa = hasBaixaJs(enc);
+
+                        if (existingPendente && incomingComBaixa) {
+                            // Se antes de importar o backup estiver como pendente de baixa
+                            // e o registro importado estiver já com a baixa, substitua!
+                            const preservedId = existingEnc.id || maxId;
+                            Object.assign(existingEnc, enc);
+                            existingEnc.id = preservedId;
+                            existingEnc.status = 'Entregue';
+                            existingEnc.entregue = true;
+                            if (!existingEnc.dataEntrega) existingEnc.dataEntrega = enc.dataEntrega || new Date().toISOString().split('T')[0];
+                            if (!existingEnc.horaEntrega) existingEnc.horaEntrega = enc.horaEntrega || new Date().toLocaleTimeString('pt-BR');
+
+                            report.encomendas.substituidasBaixa = (report.encomendas.substituidasBaixa || 0) + 1;
+                            report.encomendas.adicionadas++;
+                            report.totalAdicionados++;
+                        } else if (!existingPendente && incomingComBaixa) {
+                            // Ambos com baixa, preserva e enriquece campos vazios
+                            if (!existingEnc.assinaturaRaw && enc.assinaturaRaw) existingEnc.assinaturaRaw = enc.assinaturaRaw;
+                            if (!existingEnc.porteiroEntrega && enc.porteiroEntrega) existingEnc.porteiroEntrega = enc.porteiroEntrega;
+                            if (!existingEnc.moradorRetirou && enc.moradorRetirou) existingEnc.moradorRetirou = enc.moradorRetirou;
+                            report.encomendas.ignoradas++;
+                            report.totalIgnorados++;
+                        } else {
+                            report.encomendas.ignoradas++;
+                            report.totalIgnorados++;
+                        }
                     }
                 });
 
@@ -6864,7 +6911,7 @@
                     titulo: 'IMPORTAR BANCO DE DADOS',
                     subtitulo: 'Mesclagem não destrutiva',
                     icone: '📥',
-                    mensagem: "Deseja importar este banco de dados?\n\nOs registros existentes serão PRESERVADOS (não serão substituídos) e os novos registros de Moradores, Porteiros, Entregadores, Plataformas e Encomendas serão adicionados ao sistema.",
+                    mensagem: "Deseja importar este banco de dados?\n\nℹ️ Os registros existentes serão preservados e complementados. Caso alguma encomenda esteja pendente no sistema e já conste com baixa concluída no backup, a baixa será atualizada e substituída automaticamente.",
                     botaoConfirmar: 'Sim, Importar Dados',
                     botaoCancelar: 'Cancelar',
                     onCancel: () => {
