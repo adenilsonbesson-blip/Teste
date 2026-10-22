@@ -179,18 +179,29 @@ class DriveBackupWorker(
                 )
 
                 val encomendas = mutableListOf<Map<String, String>>()
-                val cursor = db.rawQuery("SELECT rastreio, plataforma, bloco, apto, morador, status, dataEntrada, dataEntrega FROM encomendas ORDER BY id DESC", null)
+                val cursor = db.rawQuery("SELECT * FROM encomendas ORDER BY id DESC", null)
+                val rastreioIdx = cursor.getColumnIndex("rastreio")
+                val platIdx = cursor.getColumnIndex("plataforma")
+                val blocoIdx = cursor.getColumnIndex("bloco")
+                val aptoIdx = cursor.getColumnIndex("apto")
+                val moradorIdx = cursor.getColumnIndex("morador")
+                val statusIdx = cursor.getColumnIndex("status")
+                val dataEntIdx = cursor.getColumnIndex("dataEntrada")
+                val dataEntrIdx = cursor.getColumnIndex("dataEntrega")
+                val horaEntrIdx = cursor.getColumnIndex("horaEntrega")
+
                 while (cursor.moveToNext()) {
-                    encomendas.add(mapOf(
-                        "rastreio" to (cursor.getString(0) ?: ""),
-                        "plataforma" to (cursor.getString(1) ?: ""),
-                        "bloco" to (cursor.getString(2) ?: ""),
-                        "apto" to (cursor.getString(3) ?: ""),
-                        "morador" to (cursor.getString(4) ?: ""),
-                        "status" to (cursor.getString(5) ?: ""),
-                        "dataEntrada" to (cursor.getString(6) ?: ""),
-                        "dataEntrega" to (cursor.getString(7) ?: "")
-                    ))
+                    val map = mutableMapOf<String, String>()
+                    if (rastreioIdx != -1) map["rastreio"] = cursor.getString(rastreioIdx) ?: ""
+                    if (platIdx != -1) map["plataforma"] = cursor.getString(platIdx) ?: ""
+                    if (blocoIdx != -1) map["bloco"] = cursor.getString(blocoIdx) ?: ""
+                    if (aptoIdx != -1) map["apto"] = cursor.getString(aptoIdx) ?: ""
+                    if (moradorIdx != -1) map["morador"] = cursor.getString(moradorIdx) ?: ""
+                    if (statusIdx != -1) map["status"] = cursor.getString(statusIdx) ?: ""
+                    if (dataEntIdx != -1) map["dataEntrada"] = cursor.getString(dataEntIdx) ?: ""
+                    if (dataEntrIdx != -1) map["dataEntrega"] = cursor.getString(dataEntrIdx) ?: ""
+                    if (horaEntrIdx != -1) map["horaEntrega"] = cursor.getString(horaEntrIdx) ?: ""
+                    encomendas.add(map)
                 }
                 cursor.close()
                 db.close()
@@ -200,16 +211,16 @@ class DriveBackupWorker(
 
                 val paint = android.graphics.Paint().apply {
                     color = android.graphics.Color.BLACK
-                    textSize = 10f
+                    textSize = 8.5f
                 }
                 val titlePaint = android.graphics.Paint().apply {
                     color = android.graphics.Color.parseColor("#1e3a8a")
-                    textSize = 16f
+                    textSize = 15f
                     isFakeBoldText = true
                 }
                 val headerPaint = android.graphics.Paint().apply {
                     color = android.graphics.Color.parseColor("#374151")
-                    textSize = 9f
+                    textSize = 8.5f
                     isFakeBoldText = true
                 }
                 val linePaint = android.graphics.Paint().apply {
@@ -224,7 +235,7 @@ class DriveBackupWorker(
                 var y = 40f
                 canvas.drawText("Relatório Mensal de Encomendas - Condomínio", 40f, y, titlePaint)
                 y += 20f
-                paint.textSize = 9f
+                paint.textSize = 8.5f
                 paint.color = android.graphics.Color.parseColor("#6b7280")
                 val dateGen = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date())
                 canvas.drawText("Gerado em: $dateGen | Total de registros: ${encomendas.size}", 40f, y, paint)
@@ -233,15 +244,16 @@ class DriveBackupWorker(
                 // Table Header
                 canvas.drawRect(40f, y, 555f, y + 20f, android.graphics.Paint().apply { color = android.graphics.Color.parseColor("#f3f4f6") })
                 canvas.drawText("Rastreio", 45f, y + 14f, headerPaint)
-                canvas.drawText("Plat.", 170f, y + 14f, headerPaint)
-                canvas.drawText("Bloco/Apto", 230f, y + 14f, headerPaint)
-                canvas.drawText("Morador", 300f, y + 14f, headerPaint)
-                canvas.drawText("Status", 440f, y + 14f, headerPaint)
-                canvas.drawText("Data Ent.", 500f, y + 14f, headerPaint)
+                canvas.drawText("Plat.", 155f, y + 14f, headerPaint)
+                canvas.drawText("Bloco/Apto", 215f, y + 14f, headerPaint)
+                canvas.drawText("Morador", 275f, y + 14f, headerPaint)
+                canvas.drawText("Status", 370f, y + 14f, headerPaint)
+                canvas.drawText("Data Ent.", 425f, y + 14f, headerPaint)
+                canvas.drawText("Data/Hora Entrega", 480f, y + 14f, headerPaint)
                 y += 25f
 
                 paint.color = android.graphics.Color.BLACK
-                paint.textSize = 9f
+                paint.textSize = 8.5f
 
                 for (item in encomendas) {
                     if (y > 780f) {
@@ -254,11 +266,12 @@ class DriveBackupWorker(
                         y += 30f
                         canvas.drawRect(40f, y, 555f, y + 20f, android.graphics.Paint().apply { color = android.graphics.Color.parseColor("#f3f4f6") })
                         canvas.drawText("Rastreio", 45f, y + 14f, headerPaint)
-                        canvas.drawText("Plat.", 170f, y + 14f, headerPaint)
-                        canvas.drawText("Bloco/Apto", 230f, y + 14f, headerPaint)
-                        canvas.drawText("Morador", 300f, y + 14f, headerPaint)
-                        canvas.drawText("Status", 440f, y + 14f, headerPaint)
-                        canvas.drawText("Data Ent.", 500f, y + 14f, headerPaint)
+                        canvas.drawText("Plat.", 155f, y + 14f, headerPaint)
+                        canvas.drawText("Bloco/Apto", 215f, y + 14f, headerPaint)
+                        canvas.drawText("Morador", 275f, y + 14f, headerPaint)
+                        canvas.drawText("Status", 370f, y + 14f, headerPaint)
+                        canvas.drawText("Data Ent.", 425f, y + 14f, headerPaint)
+                        canvas.drawText("Data/Hora Entrega", 480f, y + 14f, headerPaint)
                         y += 25f
                     }
 
@@ -267,14 +280,26 @@ class DriveBackupWorker(
                     val blocoApto = "${item["bloco"]} - ${item["apto"]}"
                     val morador = item["morador"] ?: ""
                     val status = item["status"] ?: ""
-                    val dataEnt = item["dataEntrada"] ?: ""
+                    val dataEntRaw = item["dataEntrada"] ?: ""
+                    val dataEnt = if (dataEntRaw.contains("-")) dataEntRaw.split("-").reversed().joinToString("/") else dataEntRaw
+                    val dataEntregaRaw = item["dataEntrega"] ?: ""
+                    val horaEntregaRaw = item["horaEntrega"] ?: ""
+                    val entregaFormatada = if (dataEntregaRaw.isNotEmpty()) {
+                        val d = if (dataEntregaRaw.contains("-")) dataEntregaRaw.split("-").reversed().joinToString("/") else dataEntregaRaw
+                        "$d ${horaEntregaRaw.take(5)}".trim()
+                    } else if (status == "Recebido") {
+                        "Pendente"
+                    } else {
+                        "-"
+                    }
 
-                    canvas.drawText(if (rastreio.length > 18) rastreio.substring(0, 15) + "..." else rastreio, 45f, y, paint)
-                    canvas.drawText(if (plat.length > 10) plat.substring(0, 8) + ".." else plat, 170f, y, paint)
-                    canvas.drawText(blocoApto, 230f, y, paint)
-                    canvas.drawText(if (morador.length > 20) morador.substring(0, 18) + ".." else morador, 300f, y, paint)
-                    canvas.drawText(status, 440f, y, paint)
-                    canvas.drawText(dataEnt, 500f, y, paint)
+                    canvas.drawText(if (rastreio.length > 16) rastreio.substring(0, 14) + ".." else rastreio, 45f, y, paint)
+                    canvas.drawText(if (plat.length > 10) plat.substring(0, 8) + ".." else plat, 155f, y, paint)
+                    canvas.drawText(blocoApto, 215f, y, paint)
+                    canvas.drawText(if (morador.length > 18) morador.substring(0, 16) + ".." else morador, 275f, y, paint)
+                    canvas.drawText(status, 370f, y, paint)
+                    canvas.drawText(dataEnt, 425f, y, paint)
+                    canvas.drawText(if (entregaFormatada.length > 14) entregaFormatada.substring(0, 13) + "." else entregaFormatada, 480f, y, paint)
 
                     y += 18f
                     canvas.drawLine(40f, y - 4f, 555f, y - 4f, linePaint)

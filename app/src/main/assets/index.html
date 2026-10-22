@@ -10002,24 +10002,35 @@ function doGet(e) {
 
         function exportarRelatorioPdf(apenasSelecionados = false) {
             let listaDados = [];
-            const fStatus = document.getElementById('filtro-status')?.value;
-            const fIni = document.getElementById('filtro-data-ini')?.value || ""; 
-            const fFim = document.getElementById('filtro-data-fim')?.value || ""; 
-            const fBloco = document.getElementById('filtro-bloco-select')?.value || ""; 
-            const fApto = document.getElementById('filtro-apto') ? document.getElementById('filtro-apto').value.trim().toLowerCase() : "";
-            const fRastreio = document.getElementById('filtro-rastreio') ? document.getElementById('filtro-rastreio').value.trim().toLowerCase() : "";
-            const fPlat = document.getElementById('filtro-plataforma-select') ? document.getElementById('filtro-plataforma-select').value.trim().toLowerCase() : "";
-                            
-            listaDados = (db.encomendas || []).filter(e => {
-                if (fStatus && e.status !== fStatus) return false;
-                if (fIni && e.dataEntrada < fIni) return false; 
-                if (fFim && e.dataEntrada > fFim) return false; 
-                if (fBloco && e.bloco !== fBloco) return false; 
-                if (fApto && (!e.apto || e.apto.toLowerCase() !== fApto)) return false; 
-                if (fRastreio && (!e.rastreio || !e.rastreio.toLowerCase().startsWith(fRastreio))) return false;
-                if (fPlat && (!e.plataforma || !e.plataforma.toLowerCase().includes(fPlat))) return false;
-                return true;
-            });
+            const masterCheck = document.getElementById('check-all-relatorio');
+            const masterMarcado = masterCheck && masterCheck.checked;
+            const totalBanco = (db.encomendas || []).length;
+            const temSelecao = (idsSelecaoRelatorio && idsSelecaoRelatorio.length > 0);
+
+            if (masterMarcado || (temSelecao && idsSelecaoRelatorio.length >= totalBanco && totalBanco > 0)) {
+                listaDados = [...(db.encomendas || [])];
+            } else if (temSelecao || apenasSelecionados) {
+                listaDados = (db.encomendas || []).filter(e => idsSelecaoRelatorio.includes(e.id));
+            } else {
+                const fStatus = document.getElementById('filtro-status')?.value;
+                const fIni = document.getElementById('filtro-data-ini')?.value || ""; 
+                const fFim = document.getElementById('filtro-data-fim')?.value || ""; 
+                const fBloco = document.getElementById('filtro-bloco-select')?.value || ""; 
+                const fApto = document.getElementById('filtro-apto') ? document.getElementById('filtro-apto').value.trim().toLowerCase() : "";
+                const fRastreio = document.getElementById('filtro-rastreio') ? document.getElementById('filtro-rastreio').value.trim().toLowerCase() : "";
+                const fPlat = document.getElementById('filtro-plataforma-select') ? document.getElementById('filtro-plataforma-select').value.trim().toLowerCase() : "";
+                                
+                listaDados = (db.encomendas || []).filter(e => {
+                    if (fStatus && e.status !== fStatus) return false;
+                    if (fIni && e.dataEntrada < fIni) return false; 
+                    if (fFim && e.dataEntrada > fFim) return false; 
+                    if (fBloco && e.bloco !== fBloco) return false; 
+                    if (fApto && (!e.apto || e.apto.toLowerCase() !== fApto)) return false; 
+                    if (fRastreio && (!e.rastreio || !e.rastreio.toLowerCase().startsWith(fRastreio))) return false;
+                    if (fPlat && (!e.plataforma || !e.plataforma.toLowerCase().includes(fPlat))) return false;
+                    return true;
+                });
+            }
             // Ordenar por bloco em crescente, depois data em crescente antes de exportar para PDF
             listaDados.sort((a, b) => {
                 const blocoA = (a.bloco || "").toString().trim().toLowerCase();
@@ -10036,7 +10047,8 @@ function doGet(e) {
 
             const colunasDef = [
                 { id: 'cod_barras', titulo: 'Cod.Barras' },
-                { id: 'data_hora', titulo: 'Data/Hora' },
+                { id: 'data_hora_entrada', titulo: 'Data/Hora Entrada' },
+                { id: 'data_hora_entrega', titulo: 'Data e Hora da Entrega' },
                 { id: 'plataforma', titulo: 'Plataforma' },
                 { id: 'morador', titulo: 'Morador' },
                 { id: 'funcionario', titulo: 'Funcionário' },
@@ -10049,13 +10061,27 @@ function doGet(e) {
             ];
 
             let linhasProcessadas = listaDados.map(e => {
-                const entradaFmt = `${e.dataEntrada ? e.dataEntrada.split('-').reverse().join('/') : ''} ${e.horaEntrada || ''}`; 
-                const baixaFmt = e.dataEntrega ? `${e.dataEntrega.split('-').reverse().join('/')} ${e.horaEntrega || ''}` : "Pendente";
+                const entradaData = e.dataEntrada ? e.dataEntrada.split('-').reverse().join('/') : '';
+                const entradaHora = e.horaEntrada || '';
+                const entradaFmt = `${entradaData} ${entradaHora}`.trim() || '-';
+
+                let entregaFmt = '-';
+                if (e.dataEntrega || e.horaEntrega) {
+                    const entregaData = e.dataEntrega ? e.dataEntrega.split('-').reverse().join('/') : '';
+                    const entregaHora = e.horaEntrega || '';
+                    entregaFmt = `${entregaData} ${entregaHora}`.trim() || '-';
+                } else if (e.status === 'Recebido') {
+                    entregaFmt = 'Pendente';
+                }
+
                 const isCentral = isBlocoCentral(e.bloco);
                 const isEncFunc = (e.observacao === "Enc Func" || (e.assinaturaRaw && e.assinaturaRaw.includes("Portaria Central")));
                 return { 
                     cod_barras: formatarCodBarrasMax20(e.rastreio),
-                    data_hora: e.status === 'Recebido' ? entradaFmt : baixaFmt,
+                    data_hora: entradaFmt,
+                    data_hora_entrada: entradaFmt,
+                    data_hora_entrega: entregaFmt,
+                    data_entrega: entregaFmt,
                     plataforma: String(e.plataforma || '-'),
                     morador: isCentral ? '---' : String(e.morador || '-'),
                     funcionario: isCentral ? String(e.morador || '-') : (isEncFunc ? String(e.recebedor || e.moradorRetirou || '-') : '---'),
@@ -10081,13 +10107,13 @@ function doGet(e) {
             }
 
             let html = `
-                <div style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 9pt; width: 100%;">
+                <div style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8.5pt; width: 100%;">
                     <div style="font-weight: bold; font-size: 10pt; margin-bottom: 2px;">CONDOMINIO CHACARA ANALIA FRANCO - RELATORIO DE ENCOMENDAS</div>
                     <div style="font-size: 8pt; margin-bottom: 4px;">Data: ${dataFmt} ${horaFmt} | Total de Registros: ${linhasProcessadas.length}</div>
                     <table style="width: 100%; border-collapse: collapse; table-layout: auto;">
                         <thead>
                             <tr>
-                                ${colunasDef.map(c => `<th style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 9pt; border: 1px solid #333; padding: 1px 3px; background: #e2e8f0; white-space: nowrap; text-align: left;">${c.titulo}</th>`).join('')}
+                                ${colunasDef.map(c => `<th style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8.5pt; border: 1px solid #333; padding: 1px 3px; background: #e2e8f0; white-space: nowrap; text-align: left;">${c.titulo}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -10098,15 +10124,15 @@ function doGet(e) {
                                     const row = linhasProcessadas[idx];
                                     const blocoAtual = (e.bloco || '').toString().trim();
                                     if (ultimoBloco !== null && ultimoBloco !== blocoAtual) {
-                                        htmlRows += `<tr style="background-color: transparent;"><td colspan="${colunasDef.length}" style="border: none; height: 12px; padding: 0;">&nbsp;</td></tr>`;
+                                        htmlRows += `<tr style="background-color: transparent;"><td colspan="${colunasDef.length}" style="border: none; height: 10px; padding: 0;">&nbsp;</td></tr>`;
                                     }
                                     ultimoBloco = blocoAtual;
 
                                     const isPendente = e.status === 'Recebido';
                                     const trStyle = isPendente ? 'color: red;' : '';
                                     const tdStyle = isPendente 
-                                        ? 'font-family: \'Arial Narrow\', Arial, sans-serif; font-size: 9pt; border: 1px solid #333; padding: 1px 3px; white-space: nowrap; line-height: 1.05; color: red;'
-                                        : 'font-family: \'Arial Narrow\', Arial, sans-serif; font-size: 9pt; border: 1px solid #333; padding: 1px 3px; white-space: nowrap; line-height: 1.05;';
+                                        ? 'font-family: \'Arial Narrow\', Arial, sans-serif; font-size: 8.5pt; border: 1px solid #333; padding: 1px 3px; white-space: nowrap; line-height: 1.05; color: red;'
+                                        : 'font-family: \'Arial Narrow\', Arial, sans-serif; font-size: 8.5pt; border: 1px solid #333; padding: 1px 3px; white-space: nowrap; line-height: 1.05;';
 
                                     htmlRows += `
                                         <tr style="${trStyle}">
@@ -10142,7 +10168,7 @@ function doGet(e) {
                 </style>
             `;
             printContainer.innerHTML = html;
-            appPrint("Relatorio entregas.pdf");
+            appPrint("Relatorio entregas.pdf", true);
         }
 
         let dashClockInterval = null;

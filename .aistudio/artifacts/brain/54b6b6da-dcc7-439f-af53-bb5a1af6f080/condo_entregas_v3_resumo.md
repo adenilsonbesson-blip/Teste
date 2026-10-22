@@ -24,3 +24,8 @@
    - **Proteção por Senha na Seção de Backup**: Os botões de backup e restauração na Área Admin ficam ocultos por padrão, exigindo que o administrador digite a senha autorizada, cujo hash de validação é processado de forma criptografada no código ao clicar no botão "Exibir".
    - **Lista de Backups Organizada (Mais Recente ao Mais Antigo)**: A modal de importação de banco de dados exibe todos os backups gerados ordenados do mais recente ao mais antigo, cada um com uma caixa de seleção (`checkbox`) e um botão "Restaurar" ao lado.
    - **Formatação de Alta Legibilidade**: Lista formatada com fundo branco e letras pretas para excelente visualização.
+
+
+7. **Exportação para PDF com Data e Hora da Entrega**:
+   - Inclusão da coluna expressa **"Data e Hora da Entrega"** (exibindo a data e hora em que a encomenda foi retirada/entregue, ou "Pendente" caso ainda não tenha sido retirada) em conjunto com a coluna de data/hora de entrada.
+   - Ajuste automático de orientação paisagem (A4 Landscape) e suporte a filtros ativos e seleção seletiva por checkbox.
