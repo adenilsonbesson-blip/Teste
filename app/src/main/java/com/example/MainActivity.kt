@@ -815,13 +815,29 @@ class AndroidDBInterface(
         @Volatile
         var inMemoryCache: String? = null
 
+        fun sanitizeDataJson(raw: String): String {
+            if (raw.isBlank() || raw.length < 5) return raw
+            return try {
+                val jObj = org.json.JSONObject(raw)
+                if (jObj.has("data") && jObj.optJSONObject("data")?.has("encomendas") == true) {
+                    jObj.getJSONObject("data").toString()
+                } else if (jObj.has("data") && jObj.optJSONObject("data")?.has("moradores") == true) {
+                    jObj.getJSONObject("data").toString()
+                } else {
+                    raw
+                }
+            } catch (e: Exception) {
+                raw
+            }
+        }
+
         fun prewarm(context: Context, repository: SiceRepository) {
             val file = File(context.filesDir, "entregas_backup_v16.json")
             if (file.exists()) {
                 try {
                     val text = file.readText()
                     if (text.isNotBlank() && text.length > 5) {
-                        inMemoryCache = text
+                        inMemoryCache = sanitizeDataJson(text)
                         return
                     }
                 } catch (e: Exception) {
@@ -833,7 +849,7 @@ class AndroidDBInterface(
                     repository.getWebData("sice_db_v16")
                 }
                 if (!webData.isNullOrBlank() && webData.length > 5) {
-                    inMemoryCache = webData
+                    inMemoryCache = sanitizeDataJson(webData)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -851,21 +867,22 @@ class AndroidDBInterface(
 
     @JavascriptInterface
     fun save(json: String) {
+        val cleanJson = sanitizeDataJson(json)
         // Instant in-memory cache update
-        inMemoryCache = json
+        inMemoryCache = cleanJson
         saveScope.launch {
             saveMutex.withLock {
                 try {
                     // Fast atomic write to backup file
                     try {
                         val tmpFile = File(context.filesDir, "entregas_backup_v16.tmp")
-                        tmpFile.writeText(json)
+                        tmpFile.writeText(cleanJson)
                         if (tmpFile.exists()) {
                             tmpFile.renameTo(backupFile)
                         }
                     } catch (e: Exception) {
                         try {
-                            backupFile.writeText(json)
+                            backupFile.writeText(cleanJson)
                         } catch (e2: Exception) {
                             e2.printStackTrace()
                         }
@@ -873,7 +890,7 @@ class AndroidDBInterface(
 
                     // Save directly to web_data key-value in SQLite for instant durable persistence
                     try {
-                        repository.insertWebData(com.example.data.WebData(keyName = "sice_db_v16", jsonValue = json))
+                        repository.insertWebData(com.example.data.WebData(keyName = "sice_db_v16", jsonValue = cleanJson))
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
@@ -887,7 +904,7 @@ class AndroidDBInterface(
             relationalSyncJob = saveScope.launch {
                 kotlinx.coroutines.delay(2500)
                 try {
-                    val jObj = org.json.JSONObject(json)
+                    val jObj = org.json.JSONObject(cleanJson)
                     
                     val moradoresList = mutableListOf<com.example.data.Morador>()
                     if (jObj.has("moradores")) {
@@ -986,7 +1003,9 @@ class AndroidDBInterface(
         // 1. Instant in-memory cache (0ms)
         inMemoryCache?.let {
             if (it.isNotBlank() && it.length > 5) {
-                return it
+                val clean = sanitizeDataJson(it)
+                inMemoryCache = clean
+                return clean
             }
         }
         // 2. Fast disk file read
@@ -994,8 +1013,9 @@ class AndroidDBInterface(
             try {
                 val text = backupFile.readText()
                 if (text.isNotBlank() && text.length > 5) {
-                    inMemoryCache = text
-                    return text
+                    val clean = sanitizeDataJson(text)
+                    inMemoryCache = clean
+                    return clean
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -1007,8 +1027,9 @@ class AndroidDBInterface(
                 repository.getWebData("sice_db_v16")
             }
             if (!webData.isNullOrBlank() && webData.length > 5) {
-                inMemoryCache = webData
-                return webData
+                val clean = sanitizeDataJson(webData)
+                inMemoryCache = clean
+                return clean
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -1017,8 +1038,9 @@ class AndroidDBInterface(
         // 4. Reconstruct from relational tables if necessary
         val reconstructed = reconstructJsonFromTables()
         if (reconstructed.isNotBlank() && reconstructed.length > 20) {
-            inMemoryCache = reconstructed
-            return reconstructed
+            val clean = sanitizeDataJson(reconstructed)
+            inMemoryCache = clean
+            return clean
         }
         return ""
     }
@@ -1357,12 +1379,46 @@ class AndroidDBInterface(
                 if (cursor.moveToFirst()) {
                     val webJson = cursor.getString(0)
                     if (!webJson.isNullOrBlank()) {
-                        val webObj = org.json.JSONObject(webJson)
+                        val cleanWebJson = sanitizeDataJson(webJson)
+                        val webObj = org.json.JSONObject(cleanWebJson)
+                        
+                        val inEncCount = incomingObj.optJSONArray("encomendas")?.length() ?: 0
+                        val webEncCount = webObj.optJSONArray("encomendas")?.length() ?: 0
+                        if (inEncCount == 0 && webEncCount > 0) {
+                            incomingObj.put("encomendas", webObj.getJSONArray("encomendas"))
+                        }
+                        
+                        val inMorCount = incomingObj.optJSONArray("moradores")?.length() ?: 0
+                        val webMorCount = webObj.optJSONArray("moradores")?.length() ?: 0
+                        if (inMorCount == 0 && webMorCount > 0) {
+                            incomingObj.put("moradores", webObj.getJSONArray("moradores"))
+                        }
+                        
+                        val inPortCount = incomingObj.optJSONArray("porteiros")?.length() ?: 0
+                        val webPortCount = webObj.optJSONArray("porteiros")?.length() ?: 0
+                        if (inPortCount == 0 && webPortCount > 0) {
+                            incomingObj.put("porteiros", webObj.getJSONArray("porteiros"))
+                        }
+                        
+                        val inEntCount = incomingObj.optJSONArray("entregadores")?.length() ?: 0
+                        val webEntCount = webObj.optJSONArray("entregadores")?.length() ?: 0
+                        if (inEntCount == 0 && webEntCount > 0) {
+                            incomingObj.put("entregadores", webObj.getJSONArray("entregadores"))
+                        }
+
                         if (webObj.has("plataformas") && !incomingObj.has("plataformas")) {
                             incomingObj.put("plataformas", webObj.getJSONArray("plataformas"))
                         }
+                        if (webObj.has("blocos") && !incomingObj.has("blocos")) {
+                            incomingObj.put("blocos", webObj.getJSONArray("blocos"))
+                        }
                         if (webObj.has("qrcodes") && !incomingObj.has("qrcodes")) {
                             incomingObj.put("qrcodes", webObj.getJSONObject("qrcodes"))
+                        }
+                        if (webObj.has("adminConfigured") && !incomingObj.has("adminConfigured")) {
+                            incomingObj.put("adminConfigured", webObj.optBoolean("adminConfigured"))
+                            incomingObj.put("adminUser", webObj.optString("adminUser", ""))
+                            incomingObj.put("adminPassword", webObj.optString("adminPassword", ""))
                         }
                     }
                 }
@@ -1372,107 +1428,7 @@ class AndroidDBInterface(
             incomingDb.close()
             tempFile.delete()
 
-            // Get current local database JSON state
-            val currentJsonStr = reconstructJsonFromTables()
-            val currentObj = if (currentJsonStr.isNotBlank()) org.json.JSONObject(currentJsonStr) else org.json.JSONObject()
-
-            // Non-destructively merge incoming backup into current database state
-            val mergedObj = mergeJsonNonDestructive(currentObj, incomingObj)
-
-            val jsonString = mergedObj.toString()
-
-            // 1. Clear / Sync in-memory cache instantly
-            AndroidDBInterface.inMemoryCache = jsonString
-
-            // 2. Save directly to disk and web_data
-            save(jsonString)
-
-            // 3. Update local Room SQLite database with merged records (persistent database, adding new records and updating pending -> delivered)
-            runBlocking(Dispatchers.IO) {
-                val moradoresList = mutableListOf<com.example.data.Morador>()
-                if (mergedObj.has("moradores")) {
-                    val arr = mergedObj.getJSONArray("moradores")
-                    for (i in 0 until arr.length()) {
-                        val item = arr.getJSONObject(i)
-                        moradoresList.add(com.example.data.Morador(
-                            id = item.optInt("id", 0),
-                            nome = item.optString("nome", ""),
-                            bloco = item.optString("bloco", ""),
-                            apto = item.optString("apto", "")
-                        ))
-                    }
-                }
-                
-                val porteirosList = mutableListOf<com.example.data.Porteiro>()
-                if (mergedObj.has("porteiros")) {
-                    val arr = mergedObj.getJSONArray("porteiros")
-                    for (i in 0 until arr.length()) {
-                        val item = arr.getJSONObject(i)
-                        porteirosList.add(com.example.data.Porteiro(
-                            id = item.optInt("id", 0),
-                            nome = item.optString("nome", ""),
-                            turno = item.optString("turno", ""),
-                            turnoInicio = item.optString("turnoInicio", ""),
-                            turnoFim = item.optString("turnoFim", ""),
-                            dia = item.optString("dia", ""),
-                            dataInicio = item.optString("dataInicio", ""),
-                            bloco = item.optString("bloco", "")
-                        ))
-                    }
-                }
-                
-                val entregadoresList = mutableListOf<com.example.data.Entregador>()
-                if (mergedObj.has("entregadores")) {
-                    val arr = mergedObj.getJSONArray("entregadores")
-                    for (i in 0 until arr.length()) {
-                        val item = arr.getJSONObject(i)
-                        entregadoresList.add(com.example.data.Entregador(
-                            id = item.optInt("id", 0),
-                            nome = item.optString("nome", ""),
-                            empresa = item.optString("empresa", ""),
-                            dia = item.optString("dia", ""),
-                            dataInicio = item.optString("dataInicio", ""),
-                            horaEntrada = item.optString("horaEntrada", ""),
-                            horaSaida = item.optString("horaSaida", "")
-                        ))
-                    }
-                }
-                
-                val encomendasList = mutableListOf<com.example.data.Encomenda>()
-                if (mergedObj.has("encomendas")) {
-                    val arr = mergedObj.getJSONArray("encomendas")
-                    for (i in 0 until arr.length()) {
-                        val item = arr.getJSONObject(i)
-                        encomendasList.add(com.example.data.Encomenda(
-                            id = item.optInt("id", 0),
-                            rastreio = item.optString("rastreio", ""),
-                            plataforma = item.optString("plataforma", ""),
-                            bloco = item.optString("bloco", ""),
-                            apto = item.optString("apto", ""),
-                            morador = item.optString("morador", ""),
-                            entregador = item.optString("entregador", ""),
-                            status = item.optString("status", ""),
-                            dataEntrada = item.optString("dataEntrada", ""),
-                            horaEntrada = item.optString("horaEntrada", ""),
-                            dataEntrega = item.optString("dataEntrega", ""),
-                            horaEntrega = item.optString("horaEntrega", ""),
-                            porteiroEntrega = item.optString("porteiroEntrega", ""),
-                            assinaturaRaw = item.optString("assinaturaRaw", "")
-                        ))
-                    }
-                }
-
-                repository.syncFullDatabase(moradoresList, porteirosList, entregadoresList, encomendasList)
-            }
-
-            val totalEnc = incomingObj.optJSONArray("encomendas")?.length() ?: 0
-            val res = org.json.JSONObject()
-            res.put("success", true)
-            res.put("report", org.json.JSONObject().apply {
-                put("totalImportados", totalEnc)
-                put("totalAnalisados", totalEnc)
-            })
-            res.toString()
+            processAndApplyIncomingData(incomingObj)
         } catch (e: Exception) {
             e.printStackTrace()
             val res = org.json.JSONObject()
@@ -1480,6 +1436,159 @@ class AndroidDBInterface(
             res.put("error", e.localizedMessage ?: "Erro ao importar banco de dados")
             res.toString()
         }
+    }
+
+    fun mergeIncomingJson(incomingJsonStr: String): String {
+        return try {
+            val cleanJson = sanitizeDataJson(incomingJsonStr)
+            val incomingObj = org.json.JSONObject(cleanJson)
+            processAndApplyIncomingData(incomingObj)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            val res = org.json.JSONObject()
+            res.put("success", false)
+            res.put("error", e.localizedMessage ?: "Erro ao processar dados de backup")
+            res.toString()
+        }
+    }
+
+    private fun processAndApplyIncomingData(incomingObj: org.json.JSONObject): String {
+        // Get current local database JSON state
+        val currentLoaded = load()
+        val currentJsonStr = if (currentLoaded.isNotBlank() && currentLoaded.length > 20) {
+            currentLoaded
+        } else {
+            reconstructJsonFromTables()
+        }
+        val currentObj = if (currentJsonStr.isNotBlank()) {
+            try {
+                val parsed = org.json.JSONObject(sanitizeDataJson(currentJsonStr))
+                if (parsed.has("data") && parsed.optJSONObject("data")?.has("encomendas") == true) {
+                    parsed.getJSONObject("data")
+                } else {
+                    parsed
+                }
+            } catch (e: Exception) {
+                org.json.JSONObject()
+            }
+        } else {
+            org.json.JSONObject()
+        }
+
+        // Non-destructively merge incoming backup into current database state
+        val mergedWrapper = mergeJsonNonDestructive(currentObj, incomingObj)
+        val mergedData = if (mergedWrapper.has("data")) mergedWrapper.getJSONObject("data") else mergedWrapper
+        val reportObj = if (mergedWrapper.has("report")) mergedWrapper.getJSONObject("report") else org.json.JSONObject()
+
+        val jsonString = mergedData.toString()
+
+        // 1. Clear / Sync in-memory cache instantly with clean data object
+        AndroidDBInterface.inMemoryCache = jsonString
+
+        // 2. Save directly to disk and web_data
+        save(jsonString)
+
+        // 3. Update local Room SQLite database with merged records immediately
+        runBlocking(Dispatchers.IO) {
+            val moradoresList = mutableListOf<com.example.data.Morador>()
+            if (mergedData.has("moradores")) {
+                val arr = mergedData.getJSONArray("moradores")
+                for (i in 0 until arr.length()) {
+                    val item = arr.getJSONObject(i)
+                    moradoresList.add(com.example.data.Morador(
+                        id = item.optInt("id", 0),
+                        nome = item.optString("nome", ""),
+                        bloco = item.optString("bloco", ""),
+                        apto = item.optString("apto", "")
+                    ))
+                }
+            }
+            
+            val porteirosList = mutableListOf<com.example.data.Porteiro>()
+            if (mergedData.has("porteiros")) {
+                val arr = mergedData.getJSONArray("porteiros")
+                for (i in 0 until arr.length()) {
+                    val item = arr.getJSONObject(i)
+                    porteirosList.add(com.example.data.Porteiro(
+                        id = item.optInt("id", 0),
+                        nome = item.optString("nome", ""),
+                        turno = item.optString("turno", ""),
+                        turnoInicio = item.optString("turnoInicio", ""),
+                        turnoFim = item.optString("turnoFim", ""),
+                        dia = item.optString("dia", ""),
+                        dataInicio = item.optString("dataInicio", ""),
+                        bloco = item.optString("bloco", "")
+                    ))
+                }
+            }
+            
+            val entregadoresList = mutableListOf<com.example.data.Entregador>()
+            if (mergedData.has("entregadores")) {
+                val arr = mergedData.getJSONArray("entregadores")
+                for (i in 0 until arr.length()) {
+                    val item = arr.getJSONObject(i)
+                    entregadoresList.add(com.example.data.Entregador(
+                        id = item.optInt("id", 0),
+                        nome = item.optString("nome", ""),
+                        empresa = item.optString("empresa", ""),
+                        dia = item.optString("dia", ""),
+                        dataInicio = item.optString("dataInicio", ""),
+                        horaEntrada = item.optString("horaEntrada", ""),
+                        horaSaida = item.optString("horaSaida", "")
+                    ))
+                }
+            }
+            
+            val encomendasList = mutableListOf<com.example.data.Encomenda>()
+            if (mergedData.has("encomendas")) {
+                val arr = mergedData.getJSONArray("encomendas")
+                for (i in 0 until arr.length()) {
+                    val item = arr.getJSONObject(i)
+                    encomendasList.add(com.example.data.Encomenda(
+                        id = item.optInt("id", 0),
+                        rastreio = item.optString("rastreio", ""),
+                        plataforma = item.optString("plataforma", ""),
+                        bloco = item.optString("bloco", ""),
+                        apto = item.optString("apto", ""),
+                        morador = item.optString("morador", ""),
+                        entregador = item.optString("entregador", ""),
+                        status = item.optString("status", ""),
+                        dataEntrada = item.optString("dataEntrada", ""),
+                        horaEntrada = item.optString("horaEntrada", ""),
+                        dataEntrega = item.optString("dataEntrega", ""),
+                        horaEntrega = item.optString("horaEntrega", ""),
+                        porteiroEntrega = item.optString("porteiroEntrega", ""),
+                        assinaturaRaw = item.optString("assinaturaRaw", "")
+                    ))
+                }
+            }
+
+            repository.syncFullDatabase(moradoresList, porteirosList, entregadoresList, encomendasList)
+
+            if (mergedData.has("qrcodes")) {
+                val qrObj = mergedData.getJSONObject("qrcodes")
+                val keys = qrObj.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val token = qrObj.optString(key, "")
+                    if (key.isNotEmpty()) {
+                        repository.insertBlockQrCode(com.example.data.BlockQrCode(bloco = key, token = token))
+                    }
+                }
+            }
+
+            try {
+                val siceDb = app.database
+                siceDb.openHelper.writableDatabase.execSQL("PRAGMA wal_checkpoint(FULL)")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        val res = org.json.JSONObject()
+        res.put("success", true)
+        res.put("report", reportObj)
+        return res.toString()
     }
 
     private fun extractJsonFromSQLite(db: android.database.sqlite.SQLiteDatabase): org.json.JSONObject {
@@ -1566,22 +1675,35 @@ class AndroidDBInterface(
             val colHoraEntr = c.getColumnIndex("horaEntrega")
             val colPortEntr = c.getColumnIndex("porteiroEntrega")
             val colAss = c.getColumnIndex("assinaturaRaw")
+            val colEntregue = c.getColumnIndex("entregue")
+            val colRecebedor = c.getColumnIndex("recebedor")
+            val colMoradorRet = c.getColumnIndex("moradorRetirou")
             while (c.moveToNext()) {
                 val obj = org.json.JSONObject()
                 if (colId >= 0) obj.put("id", c.getInt(colId))
-                obj.put("rastreio", if (colRastreio >= 0) c.getString(colRastreio) else "")
-                obj.put("plataforma", if (colPlat >= 0) c.getString(colPlat) else "")
-                obj.put("bloco", if (colBloco >= 0) c.getString(colBloco) else "")
-                obj.put("apto", if (colApto >= 0) c.getString(colApto) else "")
-                obj.put("morador", if (colMorador >= 0) c.getString(colMorador) else "")
-                obj.put("entregador", if (colEntregador >= 0) c.getString(colEntregador) else "")
-                obj.put("status", if (colStatus >= 0) c.getString(colStatus) else "Recebido")
-                obj.put("dataEntrada", if (colDataEnt >= 0) c.getString(colDataEnt) else "")
-                obj.put("horaEntrada", if (colHoraEnt >= 0) c.getString(colHoraEnt) else "")
-                obj.put("dataEntrega", if (colDataEntr >= 0) c.getString(colDataEntr) else "")
-                obj.put("horaEntrega", if (colHoraEntr >= 0) c.getString(colHoraEntr) else "")
-                obj.put("porteiroEntrega", if (colPortEntr >= 0) c.getString(colPortEntr) else "")
-                obj.put("assinaturaRaw", if (colAss >= 0) c.getString(colAss) else "")
+                obj.put("rastreio", if (colRastreio >= 0) c.getString(colRastreio) ?: "" else "")
+                obj.put("plataforma", if (colPlat >= 0) c.getString(colPlat) ?: "" else "")
+                obj.put("bloco", if (colBloco >= 0) c.getString(colBloco) ?: "" else "")
+                obj.put("apto", if (colApto >= 0) c.getString(colApto) ?: "" else "")
+                obj.put("morador", if (colMorador >= 0) c.getString(colMorador) ?: "" else "")
+                obj.put("entregador", if (colEntregador >= 0) c.getString(colEntregador) ?: "" else "")
+                val statusVal = if (colStatus >= 0) c.getString(colStatus) ?: "Recebido" else "Recebido"
+                obj.put("status", statusVal)
+                obj.put("dataEntrada", if (colDataEnt >= 0) c.getString(colDataEnt) ?: "" else "")
+                obj.put("horaEntrada", if (colHoraEnt >= 0) c.getString(colHoraEnt) ?: "" else "")
+                val dtEntrega = if (colDataEntr >= 0) c.getString(colDataEntr) ?: "" else ""
+                val hrEntrega = if (colHoraEntr >= 0) c.getString(colHoraEntr) ?: "" else ""
+                obj.put("dataEntrega", dtEntrega)
+                obj.put("horaEntrega", hrEntrega)
+                obj.put("porteiroEntrega", if (colPortEntr >= 0) c.getString(colPortEntr) ?: "" else "")
+                obj.put("assinaturaRaw", if (colAss >= 0) c.getString(colAss) ?: "" else "")
+                if (colEntregue >= 0) {
+                    obj.put("entregue", c.getInt(colEntregue) == 1 || c.getString(colEntregue).equals("true", ignoreCase = true))
+                } else if (statusVal.equals("Entregue", ignoreCase = true) || dtEntrega.isNotBlank()) {
+                    obj.put("entregue", true)
+                }
+                if (colRecebedor >= 0) obj.put("recebedor", c.getString(colRecebedor) ?: "")
+                if (colMoradorRet >= 0) obj.put("moradorRetirou", c.getString(colMoradorRet) ?: "")
                 arr.put(obj)
             }
             c.close()
@@ -1827,10 +1949,17 @@ class AndroidDBInterface(
                 }
 
                 if (matchIdx == null) {
-                    maxId++
-                    enc.put("id", maxId)
+                    val assignedId = if (inId > 0 && !idToIdx.containsKey(inId)) {
+                        if (inId > maxId) maxId = inId
+                        inId
+                    } else {
+                        maxId++
+                        maxId
+                    }
+                    enc.put("id", assignedId)
                     val newIdx = currEncomendas.length()
                     currEncomendas.put(enc)
+                    idToIdx[assignedId] = newIdx
                     addEnc++
 
                     val plat = enc.optString("plataforma", "").trim()
@@ -1869,14 +1998,21 @@ class AndroidDBInterface(
                         currEncomendas.put(matchIdx, existingEnc)
                         substituidasBaixaEnc++
                         addEnc++
-                    } else if (!existingPendente && incomingComBaixa) {
-                        // Already delivered, just update missing details
+                    } else if (incomingComBaixa) {
+                        // Already delivered, preserve and enrich exact date/time from incoming backup
+                        if (existingEnc.optString("dataEntrega", "").isBlank() && enc.optString("dataEntrega", "").isNotBlank()) {
+                            existingEnc.put("dataEntrega", enc.optString("dataEntrega"))
+                        }
+                        if (existingEnc.optString("horaEntrega", "").isBlank() && enc.optString("horaEntrega", "").isNotBlank()) {
+                            existingEnc.put("horaEntrega", enc.optString("horaEntrega"))
+                        }
                         if (existingEnc.optString("assinaturaRaw", "").isBlank() && enc.optString("assinaturaRaw", "").isNotBlank()) {
                             existingEnc.put("assinaturaRaw", enc.optString("assinaturaRaw"))
                         }
                         if (existingEnc.optString("porteiroEntrega", "").isBlank() && enc.optString("porteiroEntrega", "").isNotBlank()) {
                             existingEnc.put("porteiroEntrega", enc.optString("porteiroEntrega"))
                         }
+                        currEncomendas.put(matchIdx, existingEnc)
                         skipEnc++
                     } else {
                         skipEnc++
@@ -1940,16 +2076,19 @@ class AndroidDBInterface(
             }
             val dbBytes = android.util.Base64.decode(pureBase64, android.util.Base64.DEFAULT)
             
-            val sqliteSignature = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
-            if (dbBytes.size < 16) {
-                return "{\"success\":false,\"error\":\"Arquivo não é um banco SQLite válido\"}"
+            val sqliteSignature = "SQLite format 3\u0000".toByteArray(StandardCharsets.US_ASCII)
+            val isSqlite = dbBytes.size >= 16 && dbBytes.take(16).toByteArray().contentEquals(sqliteSignature)
+            
+            if (isSqlite) {
+                mergeIncomingSQLiteBytes(dbBytes)
+            } else {
+                val utf8Str = String(dbBytes, StandardCharsets.UTF_8).trim()
+                if (utf8Str.startsWith("{") && utf8Str.endsWith("}")) {
+                    mergeIncomingJson(utf8Str)
+                } else {
+                    "{\"success\":false,\"error\":\"Formato de arquivo incompatível. Esperado SQLite (.db) ou JSON.\"}"
+                }
             }
-            val match = dbBytes.take(16).toByteArray().contentEquals(sqliteSignature)
-            if (!match) {
-                return "{\"success\":false,\"error\":\"Formato de banco inválido\"}"
-            }
-
-            mergeIncomingSQLiteBytes(dbBytes)
         } catch (e: Exception) {
             e.printStackTrace()
             "{\"success\":false,\"error\":\"${e.localizedMessage}\"}"
@@ -1980,7 +2119,7 @@ class AndroidDBInterface(
                 if (dir.exists() && dir.isDirectory) {
                     val files = dir.listFiles { _, name ->
                         val lower = name.lowercase(java.util.Locale.ROOT)
-                        lower.endsWith(".db") || lower.endsWith(".sqlite") || lower.endsWith(".sqlite3") || lower.contains("condoentregas")
+                        lower.endsWith(".db") || lower.endsWith(".sqlite") || lower.endsWith(".sqlite3") || lower.endsWith(".json") || lower.contains("condoentregas")
                     }
                     if (files != null) {
                         for (file in files) {
@@ -2031,15 +2170,18 @@ class AndroidDBInterface(
             }
             val dbBytes = file.readBytes()
             val sqliteSignature = "SQLite format 3\u0000".toByteArray(StandardCharsets.US_ASCII)
-            if (dbBytes.size < 16) {
-                return "{\"success\":false,\"error\":\"Arquivo inválido para banco SQLite\"}"
+            val isSqlite = dbBytes.size >= 16 && dbBytes.take(16).toByteArray().contentEquals(sqliteSignature)
+            
+            if (isSqlite) {
+                mergeIncomingSQLiteBytes(dbBytes)
+            } else {
+                val utf8Str = String(dbBytes, StandardCharsets.UTF_8).trim()
+                if (utf8Str.startsWith("{") && utf8Str.endsWith("}")) {
+                    mergeIncomingJson(utf8Str)
+                } else {
+                    "{\"success\":false,\"error\":\"Formato de arquivo incompatível. Esperado SQLite (.db) ou JSON.\"}"
+                }
             }
-            val match = dbBytes.take(16).toByteArray().contentEquals(sqliteSignature)
-            if (!match) {
-                return "{\"success\":false,\"error\":\"Formato de banco de dados incompatível\"}"
-            }
-
-            mergeIncomingSQLiteBytes(dbBytes)
         } catch (e: Exception) {
             e.printStackTrace()
             "{\"success\":false,\"error\":\"${e.localizedMessage}\"}"

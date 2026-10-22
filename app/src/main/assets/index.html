@@ -3071,9 +3071,13 @@
                 if (data) { 
                     try {
                         cachedDbSizeKB = parseFloat((data.length / 1024).toFixed(2));
-                        const parsed = JSON.parse(data); 
+                        let parsed = JSON.parse(data); 
                         if (parsed && typeof parsed === 'object') {
+                            if (parsed.data && typeof parsed.data === 'object' && (parsed.data.encomendas || parsed.data.moradores)) {
+                                parsed = parsed.data;
+                            }
                             db = Object.assign(db, parsed);
+                            try { localStorage.setItem(DB_KEY, JSON.stringify(db)); } catch(e) {}
                         }
                     } catch(e) {
                         console.error("Erro ao fazer parse do DB:", e);
@@ -6544,6 +6548,9 @@
                                 loadStorage();
                                 populatePlataformasDropdown();
                                 renderCadastros();
+                                if (typeof renderDashboard === 'function') renderDashboard();
+                                if (typeof renderEntradasRecentes === 'function') renderEntradasRecentes();
+                                if (typeof renderTabelaRelatorio === 'function') renderTabelaRelatorio();
                                 exibirRelatorioImportacaoModal(resObj.report, () => window.location.reload());
                             } else {
                                 exibirCardMensagem({
@@ -6867,6 +6874,8 @@
                             report.totalAdicionados++;
                         } else if (!existingPendente && incomingComBaixa) {
                             // Ambos com baixa, preserva e enriquece campos vazios
+                            if (!existingEnc.dataEntrega && enc.dataEntrega) existingEnc.dataEntrega = enc.dataEntrega;
+                            if (!existingEnc.horaEntrega && enc.horaEntrega) existingEnc.horaEntrega = enc.horaEntrega;
                             if (!existingEnc.assinaturaRaw && enc.assinaturaRaw) existingEnc.assinaturaRaw = enc.assinaturaRaw;
                             if (!existingEnc.porteiroEntrega && enc.porteiroEntrega) existingEnc.porteiroEntrega = enc.porteiroEntrega;
                             if (!existingEnc.moradorRetirou && enc.moradorRetirou) existingEnc.moradorRetirou = enc.moradorRetirou;
@@ -6937,6 +6946,9 @@
                                         loadStorage();
                                         populatePlataformasDropdown();
                                         renderCadastros();
+                                        if (typeof renderDashboard === 'function') renderDashboard();
+                                        if (typeof renderEntradasRecentes === 'function') renderEntradasRecentes();
+                                        if (typeof renderTabelaRelatorio === 'function') renderTabelaRelatorio();
                                         exibirRelatorioImportacaoModal(resObj.report, () => window.location.reload());
                                     } else {
                                         exibirCardMensagem({
