@@ -7,39 +7,44 @@ on:
     branches: [ "**" ]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build APK
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Set up Android SDK & Licenses
+      - name: Set up Android SDK & Accept Licenses
         run: |
-          echo "=== Aceitando licenças do Android SDK ==="
-          mkdir -p "$ANDROID_HOME/licenses"
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
-
-          echo "=== Instalando Android SDK Platform 36 e Build-Tools ==="
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" || true
+          echo "=== Configurando Android SDK ==="
+          export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          mkdir -p "$ANDROID_HOME/licenses" || true
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
+          cache-read-only: false
 
-      - name: Prepare Environment Files and Debug Signing Key
+      - name: Prepare Environment Files and Signing Key
         shell: bash
         run: |
-          echo "=== Configurando .env ==="
+          echo "=== Configurando arquivo .env ==="
           if [ ! -f .env ]; then
             if [ -f .env.example ]; then
               cp .env.example .env
@@ -48,33 +53,33 @@ jobs:
             fi
           fi
 
-          echo "=== Preparando chave de assinatura para compilação ==="
-          if [ ! -f debug.keystore ]; then
+          echo "=== Verificando chave de assinatura sice-app-key.jks ==="
+          if [ ! -f sice-app-key.jks ]; then
             keytool -genkeypair -v \
-              -keystore debug.keystore \
-              -storepass android \
-              -alias androiddebugkey \
-              -keypass android \
+              -keystore sice-app-key.jks \
+              -storepass sice2026pass \
+              -alias sicekey \
+              -keypass sice2026pass \
               -keyalg RSA \
               -keysize 2048 \
               -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
+              -dname "CN=SICE App,O=SICE,C=BR"
           fi
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew || true
 
       - name: Build APKs with Gradle
         run: |
-          gradle wrapper --gradle-version 9.3.1 || true
-          chmod +x gradlew || true
-
           if [ -f "./gradlew" ]; then
-            ./gradlew assembleDebug assembleRelease --stacktrace
+            ./gradlew assembleDebug assembleRelease --stacktrace --no-daemon
           else
-            gradle assembleDebug assembleRelease --stacktrace
+            gradle assembleDebug assembleRelease --stacktrace --no-daemon
           fi
 
       - name: Verify Generated APKs
         run: |
-          echo "=== Listando APKs gerados com sucesso ==="
+          echo "=== APKs Gerados ==="
           ls -la app/build/outputs/apk/debug/ || true
           ls -la app/build/outputs/apk/release/ || true
 
