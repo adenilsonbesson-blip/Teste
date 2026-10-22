@@ -1687,73 +1687,45 @@ class AndroidDBInterface(
                 val inBloco = enc.optString("bloco", "").trim().uppercase()
                 val inApto = enc.optString("apto", "").trim()
                 val inDtEnt = enc.optString("dataEntrada", "").trim()
-                val inHrEnt = enc.optString("horaEntrada", "").trim()
-                val inCompKey = "$inDtEnt|$inHrEnt|$inBloco|$inApto"
                 val inMorador = enc.optString("morador", "").trim().lowercase()
-
                 val incomingComBaixa = hasBaixa(enc)
 
                 var matchIdx: Int? = null
-                val cleanInRastreio = inRastreio.replace(" ", "")
-                val hasValidInRastreio = cleanInRastreio.isNotEmpty() && 
-                    cleanInRastreio != "SN" && 
-                    cleanInRastreio != "SEMRASTREIO" && 
-                    cleanInRastreio != "NA" && 
-                    cleanInRastreio != "0" &&
-                    cleanInRastreio != "S/N"
-
-                // Tier 1: Match by valid rastreio
-                if (hasValidInRastreio) {
-                    for ((k, idx) in rastreioToIdx) {
-                        val cleanK = k.replace(" ", "")
-                        if (cleanK == cleanInRastreio) {
-                            matchIdx = idx
-                            break
+                
+                // Improved Matching: Prioritize finding a pending record to replace if incoming has baixa
+                for (j in 0 until currEncomendas.length()) {
+                    val curr = currEncomendas.getJSONObject(j)
+                    val currRastreio = curr.optString("rastreio", "").trim().uppercase()
+                    val currBloco = curr.optString("bloco", "").trim().uppercase()
+                    val currApto = curr.optString("apto", "").trim()
+                    val currDtEnt = curr.optString("dataEntrada", "").trim()
+                    val currMorador = curr.optString("morador", "").trim().lowercase()
+                    
+                    var isMatch = false
+                    
+                    // Match by Rastreio (if valid)
+                    if (inRastreio.isNotEmpty() && inRastreio != "SN" && inRastreio != "S/N" && 
+                        inRastreio != "0" && currRastreio == inRastreio) {
+                        isMatch = true
+                    }
+                    // Match by ID
+                    else if (inId > 0 && curr.optInt("id", 0) == inId) {
+                        isMatch = true
+                    }
+                    // Match by Bloco/Apto/DataEntrada
+                    else if (currBloco == inBloco && currApto == inApto && currDtEnt == inDtEnt) {
+                        // If morador matches, or either is empty, count as match
+                        if (inMorador.isEmpty() || currMorador.isEmpty() || currMorador == inMorador) {
+                            isMatch = true
                         }
                     }
-                }
-
-                // Tier 2: Match by ID
-                if (matchIdx == null && inId > 0 && idToIdx.containsKey(inId)) {
-                    matchIdx = idToIdx[inId]
-                }
-
-                // Tier 3: Match by exact composite key (dataEntrada|horaEntrada|bloco|apto)
-                if (matchIdx == null && inCompKey.length > 5 && compositeToIdx.containsKey(inCompKey)) {
-                    matchIdx = compositeToIdx[inCompKey]
-                }
-
-                // Tier 4: Fuzzy match by bloco + apto + dataEntrada (prioritizing pending records when incoming has baixa)
-                if (matchIdx == null) {
-                    for (j in 0 until currEncomendas.length()) {
-                        val curr = currEncomendas.getJSONObject(j)
-                        val currBloco = curr.optString("bloco", "").trim().uppercase()
-                        val currApto = curr.optString("apto", "").trim()
-                        val currDtEnt = curr.optString("dataEntrada", "").trim()
-                        val currMorador = curr.optString("morador", "").trim().lowercase()
-
-                        if (currBloco == inBloco && currApto == inApto && currDtEnt == inDtEnt) {
-                            if (inMorador.isEmpty() || currMorador.isEmpty() || currMorador == inMorador) {
-                                if (isPendente(curr) && incomingComBaixa) {
-                                    matchIdx = j
-                                    break
-                                } else if (matchIdx == null) {
-                                    matchIdx = j // fallback to first matching date/apartment
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Tier 5: If incoming has baixa and still unmatched, match any pending item in the same bloco + apto
-                if (matchIdx == null && incomingComBaixa) {
-                    for (j in 0 until currEncomendas.length()) {
-                        val curr = currEncomendas.getJSONObject(j)
-                        val currBloco = curr.optString("bloco", "").trim().uppercase()
-                        val currApto = curr.optString("apto", "").trim()
-                        if (currBloco == inBloco && currApto == inApto && isPendente(curr)) {
+                    
+                    if (isMatch) {
+                        if (isPendente(curr) && incomingComBaixa) {
                             matchIdx = j
-                            break
+                            break // Best match found, stop searching
+                        } else if (matchIdx == null) {
+                            matchIdx = j // Keep as fallback
                         }
                     }
                 }
@@ -1765,10 +1737,6 @@ class AndroidDBInterface(
                     currEncomendas.put(enc)
                     addEnc++
 
-                    if (inRastreio.isNotEmpty()) rastreioToIdx[inRastreio] = newIdx
-                    idToIdx[maxId] = newIdx
-                    if (inCompKey.length > 5) compositeToIdx[inCompKey] = newIdx
-
                     val plat = enc.optString("plataforma", "").trim()
                     if (plat.isNotEmpty() && !platKeys.contains(plat.lowercase())) {
                         platKeys.add(plat.lowercase())
@@ -1779,9 +1747,8 @@ class AndroidDBInterface(
                     val existingEnc = currEncomendas.getJSONObject(matchIdx)
                     val existingPendente = isPendente(existingEnc)
 
+                    // Always replace/update if pending and incoming has baixa, OR just update details
                     if (existingPendente && incomingComBaixa) {
-                        // Se antes de importar o backup estiver como pendente de baixa
-                        // e o registro importado estiver já com a baixa, substitua!
                         val existingId = existingEnc.optInt("id", if (inId > 0) inId else maxId)
                         val keys = enc.keys()
                         while (keys.hasNext()) {
@@ -1807,15 +1774,12 @@ class AndroidDBInterface(
                         substituidasBaixaEnc++
                         addEnc++
                     } else if (!existingPendente && incomingComBaixa) {
-                        // Ambos já possuem baixa, mescla detalhes extras caso falte na atual
+                        // Already delivered, just update missing details
                         if (existingEnc.optString("assinaturaRaw", "").isBlank() && enc.optString("assinaturaRaw", "").isNotBlank()) {
                             existingEnc.put("assinaturaRaw", enc.optString("assinaturaRaw"))
                         }
                         if (existingEnc.optString("porteiroEntrega", "").isBlank() && enc.optString("porteiroEntrega", "").isNotBlank()) {
                             existingEnc.put("porteiroEntrega", enc.optString("porteiroEntrega"))
-                        }
-                        if (existingEnc.optString("moradorRetirou", "").isBlank() && enc.optString("moradorRetirou", "").isNotBlank()) {
-                            existingEnc.put("moradorRetirou", enc.optString("moradorRetirou"))
                         }
                         skipEnc++
                     } else {
