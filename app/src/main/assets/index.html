@@ -10846,8 +10846,19 @@ function doGet(e) {
             `;
 
             const flow = document.getElementById('timeline-flow');
-            const dataEntradaFmt = e.dataEntrada.split('-').reverse().join('/');
+            const dataEntradaFmt = e.dataEntrada ? e.dataEntrada.split('-').reverse().join('/') : '';
+            const isEntregue = (e.status || '').toString().trim().toLowerCase() === 'entregue' || 
+                               Boolean(e.entregue) || 
+                               Boolean(e.dataEntrega && e.dataEntrega.trim()) || 
+                               Boolean(e.horaEntrega && e.horaEntrega.trim()) || 
+                               Boolean(e.porteiroEntrega && e.porteiroEntrega.trim()) || 
+                               Boolean(e.assinaturaRaw && e.assinaturaRaw.trim()) || 
+                               Boolean(e.moradorRetirou && e.moradorRetirou.trim()) || 
+                               Boolean(e.recebedor && e.recebedor.trim());
+
             const dataEntregaFmt = e.dataEntrega ? e.dataEntrega.split('-').reverse().join('/') : '';
+            const horaEntregaVal = e.horaEntrega || '';
+
             const descStep1 = isExame ? 'Exame laboratorial recebido e armazenado na Portaria.' : 'Encomenda recebida e armazenada na Portaria.';
             
             let flowHtml = `
@@ -10855,19 +10866,19 @@ function doGet(e) {
                     <div class="timeline-step-marker"></div>
                     <div class="timeline-step-content">
                         <span class="timeline-step-title">1. Entrada Registrada (Portaria)</span>
-                        <span class="timeline-step-time">📅 ${dataEntradaFmt} às ${e.horaEntrada}</span>
+                        <span class="timeline-step-time">📅 ${dataEntradaFmt} às ${e.horaEntrada || ''}</span>
                         <span class="timeline-step-desc">${descStep1}</span>
                     </div>
                 </div>
             `;
 
-            if (e.status === 'Entregue') {
+            if (isEntregue) {
                 flowHtml += `
                     <div class="timeline-step active">
                         <div class="timeline-step-marker"></div>
                         <div class="timeline-step-content">
                             <span class="timeline-step-title">2. Retirada Concluída (Entrega ao Bloco)</span>
-                            <span class="timeline-step-time">📅 ${dataEntregaFmt} às ${e.horaEntrega}</span>
+                            <span class="timeline-step-time">📅 ${dataEntregaFmt} às ${horaEntregaVal}</span>
                             <span class="timeline-step-desc">
                                 <strong>Porteiro Responsável:</strong> ${e.porteiroEntrega || 'Porteiro cadastrado'}<br>
                                 <strong>Assinatura / Validação:</strong> ${obterAssinaturaFormatada(e)}
