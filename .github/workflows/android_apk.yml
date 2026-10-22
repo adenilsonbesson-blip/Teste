@@ -1,0 +1,50 @@
+name: Criar APK para Android
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Criar APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Clonar o repositório
+      - name: Confira o repositório
+        uses: actions/checkout@v4
+
+      # 2. Configurar o ambiente Java JDK 21
+      - name: Configurar o JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      # 3. Configurar Android SDK e Licenças
+      - name: Configurar o SDK e as licenças do Android
+        uses: android-actions/setup-android@v3
+
+      # 4. Configurar o Gradle com cache otimizado
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # 5. Compilar o projeto e gerar o APK de depuração
+      # NOTA: O uso de './gradlew' não é suportado no ambiente AI Studio.
+      # Para o GitHub Actions externo, utilize o comando 'gradle' diretamente.
+      - name: Crie APKs com Gradle
+        run: gradle assembleDebug
+
+      # 6. Verificar se os artefatos foram gerados corretamente
+      - name: Verificar APKs gerados
+        run: ls -la app/build/outputs/apk/debug/
+
+      # 7. Fazer upload do binário compilado como artefato do GitHub
+      - name: Fazer upload do APK de depuração
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/*.apk

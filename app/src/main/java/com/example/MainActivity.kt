@@ -1349,20 +1349,28 @@ class AndroidDBInterface(
                 android.database.sqlite.SQLiteDatabase.OPEN_READONLY
             )
             
-            var incomingJson: String? = null
+            // Primary source of truth: extract directly from relational SQLite tables
+            // to ensure up-to-date delivery status (baixa), signatures, and records.
+            val incomingObj = extractJsonFromSQLite(incomingDb)
+            
+            // Supplement with web_data if qrcodes or platforms exist there
             try {
                 val cursor = incomingDb.rawQuery("SELECT jsonValue FROM web_data WHERE keyName = 'sice_db_v16' LIMIT 1", null)
                 if (cursor.moveToFirst()) {
-                    incomingJson = cursor.getString(0)
+                    val webJson = cursor.getString(0)
+                    if (!webJson.isNullOrBlank()) {
+                        val webObj = org.json.JSONObject(webJson)
+                        if (webObj.has("plataformas") && !incomingObj.has("plataformas")) {
+                            incomingObj.put("plataformas", webObj.getJSONArray("plataformas"))
+                        }
+                        if (webObj.has("qrcodes") && !incomingObj.has("qrcodes")) {
+                            incomingObj.put("qrcodes", webObj.getJSONObject("qrcodes"))
+                        }
+                    }
                 }
                 cursor.close()
             } catch (e: Exception) {}
 
-            val incomingObj = if (!incomingJson.isNullOrBlank()) {
-                try { org.json.JSONObject(incomingJson) } catch (e: Exception) { extractJsonFromSQLite(incomingDb) }
-            } else {
-                extractJsonFromSQLite(incomingDb)
-            }
             incomingDb.close()
             tempFile.delete()
 
