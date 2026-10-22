@@ -1692,40 +1692,48 @@ class AndroidDBInterface(
 
                 var matchIdx: Int? = null
                 
-                // Improved Matching: Prioritize finding a pending record to replace if incoming has baixa
-                for (j in 0 until currEncomendas.length()) {
-                    val curr = currEncomendas.getJSONObject(j)
-                    val currRastreio = curr.optString("rastreio", "").trim().uppercase()
-                    val currBloco = curr.optString("bloco", "").trim().uppercase()
-                    val currApto = curr.optString("apto", "").trim()
-                    val currDtEnt = curr.optString("dataEntrada", "").trim()
-                    val currMorador = curr.optString("morador", "").trim().lowercase()
-                    
-                    var isMatch = false
-                    
-                    // Match by Rastreio (if valid)
-                    if (inRastreio.isNotEmpty() && inRastreio != "SN" && inRastreio != "S/N" && 
-                        inRastreio != "0" && currRastreio == inRastreio) {
-                        isMatch = true
-                    }
-                    // Match by ID
-                    else if (inId > 0 && curr.optInt("id", 0) == inId) {
-                        isMatch = true
-                    }
-                    // Match by Bloco/Apto/DataEntrada
-                    else if (currBloco == inBloco && currApto == inApto && currDtEnt == inDtEnt) {
-                        // If morador matches, or either is empty, count as match
-                        if (inMorador.isEmpty() || currMorador.isEmpty() || currMorador == inMorador) {
-                            isMatch = true
+                // 1. Try match by ID first (strongest key)
+                if (inId > 0) {
+                    for (j in 0 until currEncomendas.length()) {
+                        if (currEncomendas.getJSONObject(j).optInt("id", 0) == inId) {
+                            matchIdx = j
+                            break
                         }
                     }
-                    
-                    if (isMatch) {
-                        if (isPendente(curr) && incomingComBaixa) {
-                            matchIdx = j
-                            break // Best match found, stop searching
-                        } else if (matchIdx == null) {
-                            matchIdx = j // Keep as fallback
+                }
+
+                // 2. If no ID match, try other criteria (Rastreio, Bloco/Apto/Data)
+                if (matchIdx == null) {
+                    for (j in 0 until currEncomendas.length()) {
+                        val curr = currEncomendas.getJSONObject(j)
+                        val currRastreio = curr.optString("rastreio", "").trim().uppercase()
+                        val currBloco = curr.optString("bloco", "").trim().uppercase()
+                        val currApto = curr.optString("apto", "").trim()
+                        val currDtEnt = curr.optString("dataEntrada", "").trim()
+                        val currMorador = curr.optString("morador", "").trim().lowercase()
+                        
+                        var isMatch = false
+                        
+                        // Match by Rastreio (if valid)
+                        if (inRastreio.isNotEmpty() && inRastreio != "SN" && inRastreio != "S/N" && 
+                            inRastreio != "0" && currRastreio == inRastreio) {
+                            isMatch = true
+                        }
+                        // Match by Bloco/Apto/DataEntrada
+                        else if (currBloco == inBloco && currApto == inApto && currDtEnt == inDtEnt) {
+                            if (inMorador.isEmpty() || currMorador.isEmpty() || currMorador == inMorador) {
+                                isMatch = true
+                            }
+                        }
+                        
+                        if (isMatch) {
+                            // If pending and incoming has baixa, this is a strong match
+                            if (isPendente(curr) && incomingComBaixa) {
+                                matchIdx = j
+                                break 
+                            } else if (matchIdx == null) {
+                                matchIdx = j 
+                            }
                         }
                     }
                 }
