@@ -1349,11 +1349,9 @@ class AndroidDBInterface(
                 android.database.sqlite.SQLiteDatabase.OPEN_READONLY
             )
             
-            // Primary source of truth: extract directly from relational SQLite tables
-            // to ensure up-to-date delivery status (baixa), signatures, and records.
+            // Extract exact data from incoming relational tables
             val incomingObj = extractJsonFromSQLite(incomingDb)
             
-            // Supplement with web_data if qrcodes or platforms exist there
             try {
                 val cursor = incomingDb.rawQuery("SELECT jsonValue FROM web_data WHERE keyName = 'sice_db_v16' LIMIT 1", null)
                 if (cursor.moveToFirst()) {
@@ -1374,30 +1372,112 @@ class AndroidDBInterface(
             incomingDb.close()
             tempFile.delete()
 
-            // Current data
-            val currentRaw = load()
-            val currentObj = if (currentRaw.isNotBlank()) {
-                try { org.json.JSONObject(currentRaw) } catch (e: Exception) { org.json.JSONObject() }
-            } else {
-                org.json.JSONObject()
+            // Get current local database JSON state
+            val currentJsonStr = reconstructJsonFromTables()
+            val currentObj = if (currentJsonStr.isNotBlank()) org.json.JSONObject(currentJsonStr) else org.json.JSONObject()
+
+            // Non-destructively merge incoming backup into current database state
+            val mergedObj = mergeJsonNonDestructive(currentObj, incomingObj)
+
+            val jsonString = mergedObj.toString()
+
+            // 1. Clear / Sync in-memory cache instantly
+            AndroidDBInterface.inMemoryCache = jsonString
+
+            // 2. Save directly to disk and web_data
+            save(jsonString)
+
+            // 3. Update local Room SQLite database with merged records (persistent database, adding new records and updating pending -> delivered)
+            runBlocking(Dispatchers.IO) {
+                val moradoresList = mutableListOf<com.example.data.Morador>()
+                if (mergedObj.has("moradores")) {
+                    val arr = mergedObj.getJSONArray("moradores")
+                    for (i in 0 until arr.length()) {
+                        val item = arr.getJSONObject(i)
+                        moradoresList.add(com.example.data.Morador(
+                            id = item.optInt("id", 0),
+                            nome = item.optString("nome", ""),
+                            bloco = item.optString("bloco", ""),
+                            apto = item.optString("apto", "")
+                        ))
+                    }
+                }
+                
+                val porteirosList = mutableListOf<com.example.data.Porteiro>()
+                if (mergedObj.has("porteiros")) {
+                    val arr = mergedObj.getJSONArray("porteiros")
+                    for (i in 0 until arr.length()) {
+                        val item = arr.getJSONObject(i)
+                        porteirosList.add(com.example.data.Porteiro(
+                            id = item.optInt("id", 0),
+                            nome = item.optString("nome", ""),
+                            turno = item.optString("turno", ""),
+                            turnoInicio = item.optString("turnoInicio", ""),
+                            turnoFim = item.optString("turnoFim", ""),
+                            dia = item.optString("dia", ""),
+                            dataInicio = item.optString("dataInicio", ""),
+                            bloco = item.optString("bloco", "")
+                        ))
+                    }
+                }
+                
+                val entregadoresList = mutableListOf<com.example.data.Entregador>()
+                if (mergedObj.has("entregadores")) {
+                    val arr = mergedObj.getJSONArray("entregadores")
+                    for (i in 0 until arr.length()) {
+                        val item = arr.getJSONObject(i)
+                        entregadoresList.add(com.example.data.Entregador(
+                            id = item.optInt("id", 0),
+                            nome = item.optString("nome", ""),
+                            empresa = item.optString("empresa", ""),
+                            dia = item.optString("dia", ""),
+                            dataInicio = item.optString("dataInicio", ""),
+                            horaEntrada = item.optString("horaEntrada", ""),
+                            horaSaida = item.optString("horaSaida", "")
+                        ))
+                    }
+                }
+                
+                val encomendasList = mutableListOf<com.example.data.Encomenda>()
+                if (mergedObj.has("encomendas")) {
+                    val arr = mergedObj.getJSONArray("encomendas")
+                    for (i in 0 until arr.length()) {
+                        val item = arr.getJSONObject(i)
+                        encomendasList.add(com.example.data.Encomenda(
+                            id = item.optInt("id", 0),
+                            rastreio = item.optString("rastreio", ""),
+                            plataforma = item.optString("plataforma", ""),
+                            bloco = item.optString("bloco", ""),
+                            apto = item.optString("apto", ""),
+                            morador = item.optString("morador", ""),
+                            entregador = item.optString("entregador", ""),
+                            status = item.optString("status", ""),
+                            dataEntrada = item.optString("dataEntrada", ""),
+                            horaEntrada = item.optString("horaEntrada", ""),
+                            dataEntrega = item.optString("dataEntrega", ""),
+                            horaEntrega = item.optString("horaEntrega", ""),
+                            porteiroEntrega = item.optString("porteiroEntrega", ""),
+                            assinaturaRaw = item.optString("assinaturaRaw", "")
+                        ))
+                    }
+                }
+
+                repository.syncFullDatabase(moradoresList, porteirosList, entregadoresList, encomendasList)
             }
 
-            // Merge non-destructively and produce report
-            val mergedRes = mergeJsonNonDestructive(currentObj, incomingObj)
-            val mergedObj = mergedRes.getJSONObject("data")
-            val reportObj = mergedRes.getJSONObject("report")
-
-            save(mergedObj.toString())
-
+            val totalEnc = incomingObj.optJSONArray("encomendas")?.length() ?: 0
             val res = org.json.JSONObject()
             res.put("success", true)
-            res.put("report", reportObj)
+            res.put("report", org.json.JSONObject().apply {
+                put("totalImportados", totalEnc)
+                put("totalAnalisados", totalEnc)
+            })
             res.toString()
         } catch (e: Exception) {
             e.printStackTrace()
             val res = org.json.JSONObject()
             res.put("success", false)
-            res.put("error", e.localizedMessage ?: "Erro ao mesclar banco de dados")
+            res.put("error", e.localizedMessage ?: "Erro ao importar banco de dados")
             res.toString()
         }
     }

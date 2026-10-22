@@ -5692,6 +5692,7 @@
             const totalSel = (idsSelecaoRelatorio || []).length;
             const totalBanco = (db.encomendas || []).length;
             const masterCheck = document.getElementById('check-all-relatorio');
+            const filtradosCount = (filtradosRelatoriosCache || []).length;
 
             if (masterCheck) {
                 masterCheck.checked = (totalBanco > 0 && totalSel >= totalBanco);
@@ -5701,12 +5702,12 @@
                 expTudo.style.display = 'inline-block';
                 expTudo.innerHTML = totalSel > 0 
                     ? `📤 Exportar (.PDF) (${totalSel})` 
-                    : '📤 Exportar (.PDF)';
+                    : `📤 Exportar (.PDF) (${filtradosCount})`;
             }
             if (expExcel) {
                 expExcel.innerHTML = totalSel > 0 
                     ? `📊 Exportar (CSV) (${totalSel})` 
-                    : '📊 Exportar (CSV)';
+                    : `📊 Exportar (CSV) (${filtradosCount})`;
             }
             
             document.querySelectorAll('.row-action-btns').forEach(cell => {
