@@ -984,7 +984,7 @@
                 <!-- Card Bloco / Mês -->
                 <div class="clickable-card dash-col-span-2" onclick="abrirCardFullScreen('Encomendas Entregues por Bloco (Mês)', 'dash-top-aptos-container')" style="background: #ffffff; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(20, 184, 166, 0.1); border: 2px solid #99f6e4; position: relative; display: flex; flex-direction: column; min-height: 220px;">
                     <div style="position: absolute; left: 0; top: 12%; bottom: 12%; width: 5px; border-radius: 0 4px 4px 0; background: #14b8a6;"></div>
-                    <div style="color: #0f766e; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem; display: flex; justify-content: space-between;">Entregues / Bloco / Mês <span>🏢</span></div>
+                    <div style="color: #0f766e; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem; display: flex; justify-content: space-between;"><span id="dash-title-bloco-mes">Entregues / Bloco / Mês</span> <span>🏢</span></div>
                     <div id="dash-top-aptos-container" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem;"></div>
                 </div>
             </div>
@@ -10315,6 +10315,68 @@ function doGet(e) {
             const txtAnoAnterior = `${prevYyyy}`;
             const txtHoje = `${yyyy}-${mm}-${dd}`;
             
+            // Helpers de validação de baixa e extração flexível de datas (suporta ISO e DD/MM/YYYY)
+            const isEncEntregue = (e) => {
+                if (!e) return false;
+                const st = (e.status || '').toString().trim().toLowerCase();
+                return st === 'entregue' || 
+                       st === 'baixado' || 
+                       st === 'finalizado' || 
+                       Boolean(e.entregue) || 
+                       Boolean(e.dataEntrega && e.dataEntrega.trim()) || 
+                       Boolean(e.horaEntrega && e.horaEntrega.trim()) || 
+                       Boolean(e.porteiroEntrega && e.porteiroEntrega.trim()) || 
+                       Boolean(e.assinaturaRaw && e.assinaturaRaw.trim()) || 
+                       Boolean(e.moradorRetirou && e.moradorRetirou.trim()) || 
+                       Boolean(e.recebedor && e.recebedor.trim());
+            };
+
+            const getDataRefEntrega = (e) => {
+                if (e.dataEntrega && e.dataEntrega.trim()) return e.dataEntrega.trim();
+                if (e.dataEntrada && e.dataEntrada.trim()) return e.dataEntrada.trim();
+                return '';
+            };
+
+            const extrairAnoMes = (dStr) => {
+                if (!dStr || typeof dStr !== 'string') return '';
+                const trimmed = dStr.trim();
+                const isoM = trimmed.match(/^(\d{4})[-/.](\d{2})/);
+                if (isoM) return `${isoM[1]}-${isoM[2]}`;
+                const brM = trimmed.match(/^(\d{1,2})[-/.](\d{2})[-/.](\d{4})/);
+                if (brM) return `${brM[3]}-${brM[2]}`;
+                return '';
+            };
+
+            const extrairAno = (dStr) => {
+                const ym = extrairAnoMes(dStr);
+                return ym ? ym.split('-')[0] : '';
+            };
+
+            const extrairDiaCompleto = (dStr) => {
+                if (!dStr || typeof dStr !== 'string') return '';
+                const trimmed = dStr.trim();
+                const isoM = trimmed.match(/^(\d{4})[-/.](\d{2})[-/.](\d{2})/);
+                if (isoM) return `${isoM[1]}-${isoM[2]}-${isoM[3]}`;
+                const brM = trimmed.match(/^(\d{1,2})[-/.](\d{2})[-/.](\d{4})/);
+                if (brM) return `${brM[3]}-${brM[2]}-${String(brM[1]).padStart(2, '0')}`;
+                return '';
+            };
+
+            const formatarBlocoDashboard = (rawBloco) => {
+                if (!rawBloco || !rawBloco.toString().trim()) return 'GERAL / PORTARIA';
+                let b = rawBloco.toString().trim().toUpperCase();
+                if (b === 'GUARAPARI') return 'BLOCO A';
+                if (b === 'PARATI') return 'BLOCO B';
+                if (b === 'CAMBORIU') return 'BLOCO C';
+                if (b === 'ARARUAMA') return 'BLOCO D';
+                if (b === 'ADM' || b === 'CENTRAL' || b === 'PORTARIA' || b === 'PORTARIA CENTRAL' || b === 'ADM CENTRAL') return 'ADM';
+                if (/^[A-Z]$/.test(b)) return 'BLOCO ' + b;
+                if (/^\d+$/.test(b)) return 'BLOCO ' + b;
+                if (b.startsWith('BLOCO ')) return b;
+                if (b.startsWith('BLOCO')) return 'BLOCO ' + b.replace('BLOCO', '').trim();
+                return 'BLOCO ' + b;
+            };
+
             let pendentes = 0;
             let entreguesHoje = 0;
             let countMes = 0; 
@@ -10322,26 +10384,39 @@ function doGet(e) {
             let countAnoAtual = 0;
             let countAnoAnterior = 0;
             let totalGeral = 0;
+            const blocoMesCounts = {};
 
             if (db.encomendas && Array.isArray(db.encomendas)) {
                 db.encomendas.forEach(e => {
-                    const dtEntrada = e.dataEntrada || '';
-                    const dtEntrega = e.dataEntrega || '';
+                    totalGeral++;
+                    const entregue = isEncEntregue(e);
 
-                    if (e.status === 'Recebido') pendentes++;
+                    if (!entregue) {
+                        pendentes++;
+                    } else {
+                        const dtRef = getDataRefEntrega(e);
+                        const ym = extrairAnoMes(dtRef);
+                        const yr = extrairAno(dtRef);
+                        const dia = extrairDiaCompleto(dtRef);
 
-                    if (e.status === 'Entregue') {
-                        if (dtEntrega.startsWith(txtHoje) || dtEntrada.startsWith(txtHoje)) {
+                        if (dia && dia === txtHoje) {
                             entreguesHoje++;
                         }
+                        if (ym && ym === txtMes) {
+                            countMes++;
+                            const bName = formatarBlocoDashboard(e.bloco);
+                            blocoMesCounts[bName] = (blocoMesCounts[bName] || 0) + 1;
+                        }
+                        if (ym && ym === txtMesAnterior) {
+                            countMesAnterior++;
+                        }
+                        if (yr && yr === txtAnoAtual) {
+                            countAnoAtual++;
+                        }
+                        if (yr && yr === txtAnoAnterior) {
+                            countAnoAnterior++;
+                        }
                     }
-
-                    if (dtEntrada.startsWith(txtMes) || dtEntrega.startsWith(txtMes)) countMes++;
-                    if (dtEntrada.startsWith(txtMesAnterior) || dtEntrega.startsWith(txtMesAnterior)) countMesAnterior++;
-                    if (dtEntrada.startsWith(txtAnoAtual) || dtEntrega.startsWith(txtAnoAtual)) countAnoAtual++;
-                    if (dtEntrada.startsWith(txtAnoAnterior) || dtEntrega.startsWith(txtAnoAnterior)) countAnoAnterior++;
-                    
-                    totalGeral++;
                 });
             }
             
@@ -10478,29 +10553,34 @@ function doGet(e) {
             }
 
             // 1. Encomendas Entregues por Bloco (No Mês Atual)
-            const blocoMesCounts = {};
-            db.encomendas.forEach(e => {
-                // Consideramos apenas o que foi entregue E tem data de entrega compatível com este mês
-                if (e.status === 'Entregue' && e.bloco && e.dataEntrega) {
-                    if (e.dataEntrega.startsWith(txtMes)) {
-                        const bName = e.bloco.trim().toUpperCase();
-                        blocoMesCounts[bName] = (blocoMesCounts[bName] || 0) + 1;
-                    }
-                }
-            });
             const sortedBlocosMes = Object.entries(blocoMesCounts).sort((a, b) => b[1] - a[1]);
             const blocoMesContainer = document.getElementById('dash-top-aptos-container');
+            const titleEl = document.getElementById('dash-title-bloco-mes');
+            if (titleEl) {
+                titleEl.innerText = `Entregues / Bloco (${nomeMesAtual}/${yyyy.slice(-2)})`;
+            }
+
             if (blocoMesContainer) {
                 let html = "";
                 if (sortedBlocosMes.length > 0) {
                     const maxVal = sortedBlocosMes[0][1];
+                    const totalMesEntregas = sortedBlocosMes.reduce((acc, cur) => acc + cur[1], 0);
+
+                    html += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; padding-bottom: 0.35rem; border-bottom: 1px dashed rgba(20, 184, 166, 0.3); font-size: 0.75rem;">
+                            <span style="color: var(--text-muted); font-weight: 700;">Período: ${nomeMesAtual}/${yyyy.slice(-2)}</span>
+                            <span style="color: #0f766e; font-weight: 800;">Total no Mês: ${totalMesEntregas} entregas</span>
+                        </div>
+                    `;
+
                     sortedBlocosMes.forEach(([name, count]) => {
                         const barWidth = Math.max(5, Math.round((count / maxVal) * 100));
+                        const pct = totalMesEntregas > 0 ? Math.round((count / totalMesEntregas) * 100) : 0;
                         html += `
                             <div style="margin-bottom: 0.65rem;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; margin-bottom: 0.25rem;">
-                                    <span style="font-weight: 700; color: var(--text-main); font-family: 'Inter', sans-serif;">${(name.startsWith('BLOCO') || name === 'ADM') ? name : 'BLOCO ' + name}</span>
-                                    <span style="font-size: 0.8rem; color: var(--primary); font-weight: 800;">${count} <small style="font-weight: 400; color: var(--text-muted);">un</small></span>
+                                    <span style="font-weight: 700; color: var(--text-main); font-family: 'Inter', sans-serif;">${name}</span>
+                                    <span style="font-size: 0.8rem; color: var(--primary); font-weight: 800;">${count} <small style="font-weight: 600; color: var(--text-muted); font-size: 0.75rem;">un (${pct}%)</small></span>
                                 </div>
                                 <div style="width: 100%; height: 8px; background: rgba(0,0,0,0.04); border-radius: 4px; overflow: hidden;">
                                     <div style="width: ${barWidth}%; height: 100%; background: linear-gradient(90deg, #14b8a6, #0d9488); border-radius: 4px; transition: width 0.5s ease-out;"></div>
@@ -10513,7 +10593,8 @@ function doGet(e) {
                     blocoMesContainer.innerHTML = `
                         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem 1rem; color: var(--text-muted); text-align: center;">
                             <span style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;">🏢</span>
-                            <p style="font-size: 0.85rem; margin: 0;">Sem entregas registradas<br>neste bloco este mês.</p>
+                            <p style="font-size: 0.85rem; margin: 0; font-weight: 700; color: var(--text-main);">Sem entregas registradas</p>
+                            <p style="font-size: 0.75rem; margin: 0.25rem 0 0 0; color: var(--text-muted);">Nenhum pacote entregue em ${nomeMesAtual}/${yyyy.slice(-2)} até o momento.</p>
                         </div>
                     `;
                 }

@@ -36,3 +36,9 @@
    - Normalização de colunas legadas (`destinatario`, `apartamento`, `codBarras`, `codigo`, `dataBaixa`, `horaBaixa`, `recebedor`, etc.).
    - Leitura de todas as chaves e tabelas SQLite do banco anterior (`web_data`, `encomendas`, `correspondencias`, `entregas`, `pacotes`).
    - Padrão do filtro de status configurado para **"📋 Todos os Registros (Geral - Padrão)"**, garantindo que todo o histórico (pendentes e entregues) apareça imediatamente na tela e no documento PDF.
+
+9. **Consistência e Correção do Card "Entregas / Bloco / Mês" no Painel Geral**:
+   - Unificação do algoritmo de apuração: o total e a distribuição por bloco no card agora utilizam exatamente o mesmo critério e função de validação de entregas do card "Entregue Mês Atual".
+   - Suporte a múltiplos formatos de data (ISO `YYYY-MM-DD` e brasileiro `DD/MM/YYYY`) e fallback inteligente para `dataEntrada` quando a encomenda foi entregue sem preenchimento explícito do campo secundário de data.
+   - Normalização de blocos (unifica variações como "BLOCO A", "Bloco A", "A", etc., impedindo contagens duplicadas ou fragmentadas).
+   - Exibição do cabeçalho com o mês de vigência (`Mês: Out/26`), Total de entregas do mês e percentual proporcional de cada bloco. A soma dos blocos agora bate perfeitamente (100% precisa) com o card "Entregue Mês Atual".
