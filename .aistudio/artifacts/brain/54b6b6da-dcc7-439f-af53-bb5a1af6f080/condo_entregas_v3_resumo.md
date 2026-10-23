@@ -29,3 +29,10 @@
 7. **Exportação para PDF com Data e Hora da Entrega**:
    - Inclusão da coluna expressa **"Data e Hora da Entrega"** (exibindo a data e hora em que a encomenda foi retirada/entregue, ou "Pendente" caso ainda não tenha sido retirada) em conjunto com a coluna de data/hora de entrada.
    - Ajuste automático de orientação paisagem (A4 Landscape) e suporte a filtros ativos e seleção seletiva por checkbox.
+
+8. **Exibição Total de Registros de Versões Anteriores (Relatório & PDF)**:
+   - Resolução definitiva da omissão de registros ao importar backups de versões anteriores (.db ou .json).
+   - Eliminação de colisão de IDs: encomendas importadas recebem identificadores únicos sequenciais preservando 100% dos dados sem sobrescrita indevida.
+   - Normalização de colunas legadas (`destinatario`, `apartamento`, `codBarras`, `codigo`, `dataBaixa`, `horaBaixa`, `recebedor`, etc.).
+   - Leitura de todas as chaves e tabelas SQLite do banco anterior (`web_data`, `encomendas`, `correspondencias`, `entregas`, `pacotes`).
+   - Padrão do filtro de status configurado para **"📋 Todos os Registros (Geral - Padrão)"**, garantindo que todo o histórico (pendentes e entregues) apareça imediatamente na tela e no documento PDF.

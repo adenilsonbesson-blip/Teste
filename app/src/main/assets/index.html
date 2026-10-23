@@ -1999,9 +1999,9 @@
                         <div class="form-group">
                             <label style="font-weight: 700; color: #1e293b;">📌 Status das Encomendas</label>
                             <select id="filtro-status" onchange="renderRelatorios()" style="font-weight: 700; border: 2px solid #f97316; background-color: #fff7ed; color: #0f172a;">
-                                <option value="Recebido" selected>⚠️ Somente Pendentes (Padrão)</option>
+                                <option value="" selected>📋 Todos os Registros (Geral - Padrão)</option>
+                                <option value="Recebido">⚠️ Somente Pendentes</option>
                                 <option value="Entregue">✅ Somente Entregues (Baixadas)</option>
-                                <option value="">📋 Todos os Registros (Geral)</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -3104,7 +3104,64 @@
                     e.empresa = "";
                 }
             });
-            db.encomendas = Array.isArray(db.encomendas) ? db.encomendas.filter(enc => enc && typeof enc === 'object' && enc.id) : [];
+
+            // Normalização e sanitização robusta de encomendas (compatível com backups de versões anteriores)
+            let maxEncIdFound = 1000;
+            if (Array.isArray(db.encomendas)) {
+                db.encomendas.forEach(e => {
+                    if (e && e.id && Number(e.id) > maxEncIdFound) maxEncIdFound = Number(e.id);
+                });
+            }
+            const toIsoDateJs = (d) => {
+                if (!d || typeof d !== 'string') return '';
+                const trimmed = d.trim();
+                if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) {
+                    const parts = trimmed.split('/');
+                    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                }
+                return trimmed;
+            };
+
+            db.encomendas = Array.isArray(db.encomendas) ? db.encomendas.filter(enc => enc && typeof enc === 'object').map((enc, idx) => {
+                if (!enc.id || Number(enc.id) <= 0) {
+                    enc.id = ++maxEncIdFound;
+                } else {
+                    enc.id = Number(enc.id);
+                }
+
+                // Normalização de campos de versões legadas
+                if (!enc.morador && enc.destinatario) enc.morador = enc.destinatario;
+                if (!enc.apto && enc.apartamento) enc.apto = enc.apartamento;
+                if (!enc.rastreio) enc.rastreio = enc.codigo || enc.codBarras || enc.codigoBarras || enc.codigoRastreio || '';
+                if (!enc.dataEntrada) enc.dataEntrada = enc.data || enc.criadoEm || enc.dataCriacao || '';
+                if (!enc.horaEntrada) enc.horaEntrada = enc.hora || '12:00:00';
+                if (!enc.dataEntrega) enc.dataEntrega = enc.dataBaixa || '';
+                if (!enc.horaEntrega) enc.horaEntrega = enc.horaBaixa || '';
+                if (!enc.porteiroEntrega) enc.porteiroEntrega = enc.recebedor || enc.porteiro || '';
+                if (!enc.assinaturaRaw) enc.assinaturaRaw = enc.assinatura || '';
+                if (!enc.observacao) enc.observacao = enc.observacoes || enc.obs || '';
+
+                enc.dataEntrada = toIsoDateJs(enc.dataEntrada);
+                if (enc.dataEntrega) enc.dataEntrega = toIsoDateJs(enc.dataEntrega);
+
+                const st = (enc.status || '').toString().trim().toLowerCase();
+                const hasBaixa = st === 'entregue' || 
+                                 st === 'baixado' ||
+                                 st === 'finalizado' ||
+                                 Boolean(enc.entregue) || 
+                                 Boolean(enc.dataEntrega && enc.dataEntrega.trim()) || 
+                                 Boolean(enc.horaEntrega && enc.horaEntrega.trim()) || 
+                                 Boolean(enc.porteiroEntrega && enc.porteiroEntrega.trim()) || 
+                                 Boolean(enc.assinaturaRaw && enc.assinaturaRaw.trim()) || 
+                                 Boolean(enc.moradorRetirou && enc.moradorRetirou.trim()) || 
+                                 Boolean(enc.recebedor && enc.recebedor.trim());
+
+                enc.status = hasBaixa ? 'Entregue' : 'Recebido';
+                enc.entregue = hasBaixa;
+
+                return enc;
+            }) : [];
+
             db.plataformas = Array.isArray(db.plataformas) ? [...new Set(db.plataformas.filter(p => p && typeof p === 'string' && p.trim() !== ''))] : ["Mercado Livre", "Shopee", "Shein", "Magazine Luiza", "C&A", "Mile", "Natura", "Loggi", "TikTok", "Zara", "Amazon"];
             db.laboratorios = Array.isArray(db.laboratorios) ? [...new Set(db.laboratorios.filter(l => l && typeof l === 'string' && l.trim() !== ''))] : ["Fleury", "Albert Einstein", "Hermes Pardini", "Dasa", "Lavoisier", "Sabin", "Delboni Auriemo", "Salomão Zoppi", "CDB", "Laboratório São Paulo", "A+ Medicina Diagnóstica", "Sírio-Libanês"];
             if (typeof populateLaboratoriosDropdown === 'function') populateLaboratoriosDropdown();
@@ -3420,7 +3477,7 @@
             if(apto) apto.value = '';
             if(rast) rast.value = '';
             if(plat) plat.value = '';
-            if(status) status.value = 'Recebido'; // Padrão: Somente os pendentes
+            if(status) status.value = ''; // Padrão: Todos os registros (Geral)
             if(table) table.innerHTML = '';
             if(checkAll) checkAll.checked = false;
             idsSelecaoRelatorio = [];
@@ -3442,7 +3499,7 @@
             if(apto) apto.value = '';
             if(rast) rast.value = '';
             if(plat) plat.value = '';
-            if(status) status.value = 'Recebido'; // Padrão: Somente os pendentes
+            if(status) status.value = ''; // Padrão: Todos os registros (Geral)
             if(checkAll) checkAll.checked = false;
             idsSelecaoRelatorio = [];
             renderRelatorios();
@@ -5547,7 +5604,7 @@
         }
 
         function renderRelatorios(isLoadMore = false) {
-            const fStatus = document.getElementById('filtro-status')?.value ?? "Recebido";
+            const fStatus = document.getElementById('filtro-status')?.value || "";
             const fIni = document.getElementById('filtro-data-ini')?.value || "";
             const fFim = document.getElementById('filtro-data-fim')?.value || "";
             const fBloco = document.getElementById('filtro-bloco-select')?.value || "";
@@ -5563,7 +5620,7 @@
             }
 
             let filtrados = (db.encomendas || []).filter(e => {
-                if (fStatus && e.status !== fStatus) return false;
+                if (fStatus && (e.status || "").toLowerCase() !== fStatus.toLowerCase()) return false;
                 if (fIni && e.dataEntrada < fIni) return false;
                 if (fFim && e.dataEntrada > fFim) return false;
                 if (fBloco && e.bloco !== fBloco) return false;
@@ -6791,36 +6848,38 @@
                     report.encomendas.analisadas++;
                     report.totalAnalisados++;
 
-                    const rastreioFmt = (enc.rastreio || '').trim().toUpperCase();
-                    const inId = enc.id ? parseInt(enc.id) : 0;
-                    const dataEnt = (enc.dataEntrada || '').trim();
-                    const horaEnt = (enc.horaEntrada || '').trim();
+                    const rastreioFmt = (enc.rastreio || enc.codigo || enc.codBarras || enc.codigoBarras || enc.codigoRastreio || '').trim().toUpperCase();
+                    const dataEnt = toIsoDateJs(enc.dataEntrada || enc.data || enc.criadoEm || enc.dataCriacao || '');
+                    const horaEnt = (enc.horaEntrada || enc.hora || '12:00:00').trim();
                     const blocoFmt = (enc.bloco || '').trim().toUpperCase();
-                    const aptoFmt = (enc.apto || '').trim();
-                    const moradorFmt = formatarNomeIniciaisMaisculoMinisculo((enc.morador || '').trim());
-                    const platFmt = formatarNomeIniciaisMaisculoMinisculo((enc.plataforma || '').trim());
+                    const aptoFmt = (enc.apto || enc.apartamento || '').trim();
+                    const moradorFmt = formatarNomeIniciaisMaisculoMinisculo((enc.morador || enc.destinatario || '').trim());
+                    const platFmt = formatarNomeIniciaisMaisculoMinisculo((enc.plataforma || enc.empresa || '').trim());
+
+                    const stEnc = (enc.status || '').toString().trim().toLowerCase();
+                    const dtEntrIso = toIsoDateJs(enc.dataEntrega || enc.dataBaixa || '');
+                    const hrEntrVal = (enc.horaEntrega || enc.horaBaixa || '').trim();
+                    const portVal = (enc.porteiroEntrega || enc.recebedor || enc.porteiro || '').trim();
+                    const assVal = (enc.assinaturaRaw || enc.assinatura || '').trim();
+                    const obsVal = (enc.observacao || enc.observacoes || enc.obs || '').trim();
+                    const incomingComBaixa = stEnc === 'entregue' || stEnc === 'baixado' || Boolean(enc.entregue) || Boolean(dtEntrIso) || Boolean(hrEntrVal) || Boolean(portVal) || Boolean(assVal);
 
                     let existingIndex = -1;
 
-                    // 1. Busca por código de rastreio
-                    if (rastreioFmt) {
+                    // 1. Busca por código de rastreio válido
+                    if (rastreioFmt && rastreioFmt !== 'SN' && rastreioFmt !== 'S/N' && rastreioFmt !== '0' && rastreioFmt !== '-') {
                         existingIndex = db.encomendas.findIndex(e => 
                             (e.rastreio || '').trim().toUpperCase() === rastreioFmt
                         );
                     }
 
-                    // 2. Busca por ID numérico
-                    if (existingIndex === -1 && inId > 0) {
-                        existingIndex = db.encomendas.findIndex(e => e.id === inId);
-                    }
-
-                    // 3. Busca por dados compostos (caso não haja rastreio)
-                    if (existingIndex === -1) {
+                    // 2. Busca por dados compostos (caso não haja rastreio único)
+                    if (existingIndex === -1 && blocoFmt && aptoFmt && dataEnt) {
                         existingIndex = db.encomendas.findIndex(e => 
                             norm(e.dataEntrada) === norm(dataEnt) &&
-                            norm(e.horaEntrada) === norm(horaEnt) &&
                             norm(e.bloco) === norm(blocoFmt) &&
-                            norm(e.apto) === norm(aptoFmt)
+                            norm(e.apto) === norm(aptoFmt) &&
+                            (!horaEnt || !e.horaEntrada || norm(e.horaEntrada) === norm(horaEnt))
                         );
                     }
 
@@ -6828,20 +6887,21 @@
                         maxId++;
                         const novoItem = {
                             id: maxId,
-                            rastreio: enc.rastreio || '',
+                            rastreio: enc.rastreio || enc.codigo || enc.codBarras || '',
                             plataforma: platFmt,
                             bloco: blocoFmt,
                             apto: aptoFmt,
                             morador: moradorFmt,
                             entregador: formatarNomeIniciaisMaisculoMinisculo(enc.entregador || ''),
-                            status: enc.status || 'Recebido',
+                            status: incomingComBaixa ? 'Entregue' : 'Recebido',
+                            entregue: incomingComBaixa,
                             dataEntrada: dataEnt,
                             horaEntrada: horaEnt,
-                            dataEntrega: enc.dataEntrega || '',
-                            horaEntrega: enc.horaEntrega || '',
-                            porteiroEntrega: formatarNomeIniciaisMaisculoMinisculo(enc.porteiroEntrega || ''),
-                            assinaturaRaw: enc.assinaturaRaw || '',
-                            observacao: enc.observacao || ''
+                            dataEntrega: dtEntrIso,
+                            horaEntrega: hrEntrVal,
+                            porteiroEntrega: formatarNomeIniciaisMaisculoMinisculo(portVal),
+                            assinaturaRaw: assVal,
+                            observacao: obsVal
                         };
 
                         if (novoItem.plataforma && !db.plataformas.some(p => norm(p) === norm(novoItem.plataforma))) {
@@ -6856,28 +6916,31 @@
                     } else {
                         const existingEnc = db.encomendas[existingIndex];
                         const existingPendente = isPendenteJs(existingEnc);
-                        const incomingComBaixa = hasBaixaJs(enc);
 
                         if (existingPendente && incomingComBaixa) {
-                            // Se antes de importar o backup estiver como pendente de baixa
-                            // e o registro importado estiver já com a baixa, substitua!
                             const preservedId = existingEnc.id || maxId;
                             Object.assign(existingEnc, enc);
                             existingEnc.id = preservedId;
                             existingEnc.status = 'Entregue';
                             existingEnc.entregue = true;
-                            if (!existingEnc.dataEntrega) existingEnc.dataEntrega = enc.dataEntrega || new Date().toISOString().split('T')[0];
-                            if (!existingEnc.horaEntrega) existingEnc.horaEntrega = enc.horaEntrega || new Date().toLocaleTimeString('pt-BR');
+                            existingEnc.dataEntrada = dataEnt || existingEnc.dataEntrada;
+                            existingEnc.horaEntrada = horaEnt || existingEnc.horaEntrada;
+                            existingEnc.dataEntrega = dtEntrIso || existingEnc.dataEntrega || new Date().toISOString().split('T')[0];
+                            existingEnc.horaEntrega = hrEntrVal || existingEnc.horaEntrega || new Date().toLocaleTimeString('pt-BR');
+                            if (portVal) existingEnc.porteiroEntrega = portVal;
+                            if (assVal) existingEnc.assinaturaRaw = assVal;
+                            if (obsVal) existingEnc.observacao = obsVal;
 
                             report.encomendas.substituidasBaixa = (report.encomendas.substituidasBaixa || 0) + 1;
                             report.encomendas.adicionadas++;
                             report.totalAdicionados++;
                         } else if (!existingPendente && incomingComBaixa) {
                             // Ambos com baixa, preserva e enriquece campos vazios
-                            if (!existingEnc.dataEntrega && enc.dataEntrega) existingEnc.dataEntrega = enc.dataEntrega;
-                            if (!existingEnc.horaEntrega && enc.horaEntrega) existingEnc.horaEntrega = enc.horaEntrega;
-                            if (!existingEnc.assinaturaRaw && enc.assinaturaRaw) existingEnc.assinaturaRaw = enc.assinaturaRaw;
-                            if (!existingEnc.porteiroEntrega && enc.porteiroEntrega) existingEnc.porteiroEntrega = enc.porteiroEntrega;
+                            if (!existingEnc.dataEntrega && dtEntrIso) existingEnc.dataEntrega = dtEntrIso;
+                            if (!existingEnc.horaEntrega && hrEntrVal) existingEnc.horaEntrega = hrEntrVal;
+                            if (!existingEnc.assinaturaRaw && assVal) existingEnc.assinaturaRaw = assVal;
+                            if (!existingEnc.porteiroEntrega && portVal) existingEnc.porteiroEntrega = portVal;
+                            if (!existingEnc.observacao && obsVal) existingEnc.observacao = obsVal;
                             if (!existingEnc.moradorRetirou && enc.moradorRetirou) existingEnc.moradorRetirou = enc.moradorRetirou;
                             report.encomendas.ignoradas++;
                             report.totalIgnorados++;
@@ -9922,7 +9985,7 @@ function doGet(e) {
             } else if (temSelecao) {
                 listaDados = (db.encomendas || []).filter(e => idsSelecaoRelatorio.includes(e.id));
             } else {
-                const fStatus = document.getElementById('filtro-status')?.value;
+                const fStatus = document.getElementById('filtro-status')?.value || "";
                 const fIni = document.getElementById('filtro-data-ini')?.value || ""; 
                 const fFim = document.getElementById('filtro-data-fim')?.value || ""; 
                 const fBloco = document.getElementById('filtro-bloco-select')?.value || ""; 
@@ -9931,7 +9994,7 @@ function doGet(e) {
                 const fPlat = document.getElementById('filtro-plataforma-select') ? document.getElementById('filtro-plataforma-select').value.trim().toLowerCase() : "";
                 
                 listaDados = (db.encomendas || []).filter(e => {
-                    if (fStatus && e.status !== fStatus) return false;
+                    if (fStatus && (e.status || "").toLowerCase() !== fStatus.toLowerCase()) return false;
                     if (fIni && e.dataEntrada < fIni) return false; 
                     if (fFim && e.dataEntrada > fFim) return false; 
                     if (fBloco && e.bloco !== fBloco) return false; 
@@ -10012,7 +10075,7 @@ function doGet(e) {
             } else if (temSelecao || apenasSelecionados) {
                 listaDados = (db.encomendas || []).filter(e => idsSelecaoRelatorio.includes(e.id));
             } else {
-                const fStatus = document.getElementById('filtro-status')?.value;
+                const fStatus = document.getElementById('filtro-status')?.value || "";
                 const fIni = document.getElementById('filtro-data-ini')?.value || ""; 
                 const fFim = document.getElementById('filtro-data-fim')?.value || ""; 
                 const fBloco = document.getElementById('filtro-bloco-select')?.value || ""; 
@@ -10021,7 +10084,7 @@ function doGet(e) {
                 const fPlat = document.getElementById('filtro-plataforma-select') ? document.getElementById('filtro-plataforma-select').value.trim().toLowerCase() : "";
                                 
                 listaDados = (db.encomendas || []).filter(e => {
-                    if (fStatus && e.status !== fStatus) return false;
+                    if (fStatus && (e.status || "").toLowerCase() !== fStatus.toLowerCase()) return false;
                     if (fIni && e.dataEntrada < fIni) return false; 
                     if (fFim && e.dataEntrada > fFim) return false; 
                     if (fBloco && e.bloco !== fBloco) return false; 

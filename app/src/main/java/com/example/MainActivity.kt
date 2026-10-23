@@ -1359,6 +1359,106 @@ class AndroidDBInterface(
         }
     }
 
+    private fun mergeCollectionsIntoTarget(target: org.json.JSONObject, source: org.json.JSONObject) {
+        val collections = listOf("encomendas", "moradores", "porteiros", "entregadores", "plataformas", "blocos")
+        for (colName in collections) {
+            if (source.has(colName)) {
+                val srcArr = source.getJSONArray(colName)
+                if (!target.has(colName)) {
+                    target.put(colName, srcArr)
+                } else {
+                    val tgtArr = target.getJSONArray(colName)
+                    if (tgtArr.length() == 0 && srcArr.length() > 0) {
+                        target.put(colName, srcArr)
+                    } else if (srcArr.length() > 0) {
+                        // Merge unique items from src into tgt
+                        if (colName == "encomendas") {
+                            val existingTracking = HashSet<String>()
+                            val existingComp = HashSet<String>()
+                            for (i in 0 until tgtArr.length()) {
+                                val item = tgtArr.getJSONObject(i)
+                                val r = item.optString("rastreio", "").trim().uppercase()
+                                if (r.isNotEmpty() && r != "SN" && r != "S/N" && r != "0" && r != "-") existingTracking.add(r)
+                                val bl = item.optString("bloco", "").trim().uppercase()
+                                val ap = item.optString("apto", "").trim()
+                                val dt = item.optString("dataEntrada", "").trim()
+                                val hr = item.optString("horaEntrada", "").trim()
+                                if (bl.isNotEmpty() && ap.isNotEmpty() && dt.isNotEmpty()) {
+                                    existingComp.add("$bl|$ap|$dt|$hr")
+                                }
+                            }
+                            for (i in 0 until srcArr.length()) {
+                                val item = srcArr.getJSONObject(i)
+                                val r = item.optString("rastreio", "").trim().uppercase()
+                                val isTrackValid = r.isNotEmpty() && r != "SN" && r != "S/N" && r != "0" && r != "-"
+                                val bl = item.optString("bloco", "").trim().uppercase()
+                                val ap = item.optString("apto", "").trim()
+                                val dt = item.optString("dataEntrada", "").trim()
+                                val hr = item.optString("horaEntrada", "").trim()
+                                val compKey = "$bl|$ap|$dt|$hr"
+
+                                val alreadyPresent = (isTrackValid && existingTracking.contains(r)) || 
+                                                     (bl.isNotEmpty() && ap.isNotEmpty() && dt.isNotEmpty() && existingComp.contains(compKey))
+                                if (!alreadyPresent) {
+                                    if (isTrackValid) existingTracking.add(r)
+                                    if (bl.isNotEmpty() && ap.isNotEmpty() && dt.isNotEmpty()) existingComp.add(compKey)
+                                    tgtArr.put(item)
+                                }
+                            }
+                        } else if (colName == "moradores") {
+                            val existingKeys = HashSet<String>()
+                            for (i in 0 until tgtArr.length()) {
+                                val m = tgtArr.getJSONObject(i)
+                                existingKeys.add("${m.optString("nome", "").trim().lowercase()}|${m.optString("bloco", "").trim().uppercase()}|${m.optString("apto", "").trim()}")
+                            }
+                            for (i in 0 until srcArr.length()) {
+                                val m = srcArr.getJSONObject(i)
+                                val k = "${m.optString("nome", "").trim().lowercase()}|${m.optString("bloco", "").trim().uppercase()}|${m.optString("apto", "").trim()}"
+                                if (k.length > 2 && !existingKeys.contains(k)) {
+                                    existingKeys.add(k)
+                                    tgtArr.put(m)
+                                }
+                            }
+                        } else if (colName == "porteiros" || colName == "entregadores") {
+                            val existingNames = HashSet<String>()
+                            for (i in 0 until tgtArr.length()) {
+                                existingNames.add(tgtArr.getJSONObject(i).optString("nome", "").trim().lowercase())
+                            }
+                            for (i in 0 until srcArr.length()) {
+                                val item = srcArr.getJSONObject(i)
+                                val n = item.optString("nome", "").trim().lowercase()
+                                if (n.isNotEmpty() && !existingNames.contains(n)) {
+                                    existingNames.add(n)
+                                    tgtArr.put(item)
+                                }
+                            }
+                        } else if (colName == "plataformas" || colName == "blocos") {
+                            val existingVals = HashSet<String>()
+                            for (i in 0 until tgtArr.length()) {
+                                existingVals.add(tgtArr.optString(i, "").trim().lowercase())
+                            }
+                            for (i in 0 until srcArr.length()) {
+                                val v = srcArr.optString(i, "").trim()
+                                if (v.isNotEmpty() && !existingVals.contains(v.lowercase())) {
+                                    existingVals.add(v.lowercase())
+                                    tgtArr.put(v)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (source.has("qrcodes") && !target.has("qrcodes")) {
+            target.put("qrcodes", source.getJSONObject("qrcodes"))
+        }
+        if (source.has("adminConfigured") && !target.has("adminConfigured")) {
+            target.put("adminConfigured", source.optBoolean("adminConfigured"))
+            target.put("adminUser", source.optString("adminUser", ""))
+            target.put("adminPassword", source.optString("adminPassword", ""))
+        }
+    }
+
     fun mergeIncomingSQLiteBytes(dbBytes: ByteArray): String {
         return try {
             val tempFile = File(context.cacheDir, "temp_import_${System.currentTimeMillis()}.db")
@@ -1375,50 +1475,22 @@ class AndroidDBInterface(
             val incomingObj = extractJsonFromSQLite(incomingDb)
             
             try {
-                val cursor = incomingDb.rawQuery("SELECT jsonValue FROM web_data WHERE keyName = 'sice_db_v16' LIMIT 1", null)
-                if (cursor.moveToFirst()) {
+                // Check all rows in web_data (support all legacy keys: sice_db_v16, sice_db_v15, SICE_LOCAL_DB_V16, etc.)
+                val cursor = incomingDb.rawQuery("SELECT jsonValue, keyName FROM web_data ORDER BY (CASE WHEN keyName = 'sice_db_v16' THEN 0 ELSE 1 END), length(jsonValue) DESC", null)
+                while (cursor.moveToNext()) {
                     val webJson = cursor.getString(0)
-                    if (!webJson.isNullOrBlank()) {
-                        val cleanWebJson = sanitizeDataJson(webJson)
-                        val webObj = org.json.JSONObject(cleanWebJson)
-                        
-                        val inEncCount = incomingObj.optJSONArray("encomendas")?.length() ?: 0
-                        val webEncCount = webObj.optJSONArray("encomendas")?.length() ?: 0
-                        if (inEncCount == 0 && webEncCount > 0) {
-                            incomingObj.put("encomendas", webObj.getJSONArray("encomendas"))
-                        }
-                        
-                        val inMorCount = incomingObj.optJSONArray("moradores")?.length() ?: 0
-                        val webMorCount = webObj.optJSONArray("moradores")?.length() ?: 0
-                        if (inMorCount == 0 && webMorCount > 0) {
-                            incomingObj.put("moradores", webObj.getJSONArray("moradores"))
-                        }
-                        
-                        val inPortCount = incomingObj.optJSONArray("porteiros")?.length() ?: 0
-                        val webPortCount = webObj.optJSONArray("porteiros")?.length() ?: 0
-                        if (inPortCount == 0 && webPortCount > 0) {
-                            incomingObj.put("porteiros", webObj.getJSONArray("porteiros"))
-                        }
-                        
-                        val inEntCount = incomingObj.optJSONArray("entregadores")?.length() ?: 0
-                        val webEntCount = webObj.optJSONArray("entregadores")?.length() ?: 0
-                        if (inEntCount == 0 && webEntCount > 0) {
-                            incomingObj.put("entregadores", webObj.getJSONArray("entregadores"))
-                        }
-
-                        if (webObj.has("plataformas") && !incomingObj.has("plataformas")) {
-                            incomingObj.put("plataformas", webObj.getJSONArray("plataformas"))
-                        }
-                        if (webObj.has("blocos") && !incomingObj.has("blocos")) {
-                            incomingObj.put("blocos", webObj.getJSONArray("blocos"))
-                        }
-                        if (webObj.has("qrcodes") && !incomingObj.has("qrcodes")) {
-                            incomingObj.put("qrcodes", webObj.getJSONObject("qrcodes"))
-                        }
-                        if (webObj.has("adminConfigured") && !incomingObj.has("adminConfigured")) {
-                            incomingObj.put("adminConfigured", webObj.optBoolean("adminConfigured"))
-                            incomingObj.put("adminUser", webObj.optString("adminUser", ""))
-                            incomingObj.put("adminPassword", webObj.optString("adminPassword", ""))
+                    if (!webJson.isNullOrBlank() && webJson.length > 10) {
+                        try {
+                            val cleanWebJson = sanitizeDataJson(webJson)
+                            val rawWebObj = org.json.JSONObject(cleanWebJson)
+                            val webObj = if (rawWebObj.has("data") && rawWebObj.optJSONObject("data")?.has("encomendas") == true) {
+                                rawWebObj.getJSONObject("data")
+                            } else {
+                                rawWebObj
+                            }
+                            mergeCollectionsIntoTarget(incomingObj, webObj)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
                         }
                     }
                 }
@@ -1591,123 +1663,240 @@ class AndroidDBInterface(
         return res.toString()
     }
 
+    private fun getCursorCol(c: android.database.Cursor, vararg names: String): Int {
+        for (name in names) {
+            val idx = c.getColumnIndex(name)
+            if (idx >= 0) return idx
+        }
+        return -1
+    }
+
+    private fun normalizeToIsoDate(raw: String): String {
+        val trimmed = raw.trim()
+        if (trimmed.matches(Regex("\\d{2}/\\d{2}/\\d{4}"))) {
+            val parts = trimmed.split("/")
+            return "${parts[2]}-${parts[1]}-${parts[0]}"
+        }
+        return trimmed
+    }
+
     private fun extractJsonFromSQLite(db: android.database.sqlite.SQLiteDatabase): org.json.JSONObject {
         val jObj = org.json.JSONObject()
+        
+        // Discover all user tables
+        val tables = HashSet<String>()
         try {
-            val arr = org.json.JSONArray()
-            val c = db.rawQuery("SELECT * FROM moradores", null)
-            val colNome = c.getColumnIndex("nome")
-            val colBloco = c.getColumnIndex("bloco")
-            val colApto = c.getColumnIndex("apto")
-            while (c.moveToNext()) {
-                val obj = org.json.JSONObject()
-                obj.put("nome", if (colNome >= 0) c.getString(colNome) else "")
-                obj.put("bloco", if (colBloco >= 0) c.getString(colBloco) else "")
-                obj.put("apto", if (colApto >= 0) c.getString(colApto) else "")
-                arr.put(obj)
+            val tblCursor = db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'android_%' AND name != 'room_master_table'", null)
+            while (tblCursor.moveToNext()) {
+                tables.add(tblCursor.getString(0).lowercase(java.util.Locale.ROOT))
             }
-            c.close()
-            jObj.put("moradores", arr)
+            tblCursor.close()
         } catch (e: Exception) {}
 
+        // 1. Moradores
         try {
-            val arr = org.json.JSONArray()
-            val c = db.rawQuery("SELECT * FROM porteiros", null)
-            val colNome = c.getColumnIndex("nome")
-            val colTurno = c.getColumnIndex("turno")
-            val colTurnoIni = c.getColumnIndex("turnoInicio")
-            val colTurnoFim = c.getColumnIndex("turnoFim")
-            val colDia = c.getColumnIndex("dia")
-            val colDataIni = c.getColumnIndex("dataInicio")
-            val colBloco = c.getColumnIndex("bloco")
-            while (c.moveToNext()) {
-                val obj = org.json.JSONObject()
-                obj.put("nome", if (colNome >= 0) c.getString(colNome) else "")
-                obj.put("turno", if (colTurno >= 0) c.getString(colTurno) else "")
-                obj.put("turnoInicio", if (colTurnoIni >= 0) c.getString(colTurnoIni) else "")
-                obj.put("turnoFim", if (colTurnoFim >= 0) c.getString(colTurnoFim) else "")
-                obj.put("dia", if (colDia >= 0) c.getString(colDia) else "")
-                obj.put("dataInicio", if (colDataIni >= 0) c.getString(colDataIni) else "")
-                obj.put("bloco", if (colBloco >= 0) c.getString(colBloco) else "")
-                arr.put(obj)
+            val morTable = when {
+                tables.contains("moradores") -> "moradores"
+                tables.contains("morador") -> "morador"
+                else -> null
             }
-            c.close()
-            jObj.put("porteiros", arr)
-        } catch (e: Exception) {}
-
-        try {
-            val arr = org.json.JSONArray()
-            val c = db.rawQuery("SELECT * FROM entregadores", null)
-            val colNome = c.getColumnIndex("nome")
-            val colEmpresa = c.getColumnIndex("empresa")
-            val colDia = c.getColumnIndex("dia")
-            val colDataIni = c.getColumnIndex("dataInicio")
-            val colHoraEnt = c.getColumnIndex("horaEntrada")
-            val colHoraSai = c.getColumnIndex("horaSaida")
-            while (c.moveToNext()) {
-                val obj = org.json.JSONObject()
-                obj.put("nome", if (colNome >= 0) c.getString(colNome) else "")
-                obj.put("empresa", if (colEmpresa >= 0) c.getString(colEmpresa) else "")
-                obj.put("dia", if (colDia >= 0) c.getString(colDia) else "")
-                obj.put("dataInicio", if (colDataIni >= 0) c.getString(colDataIni) else "")
-                obj.put("horaEntrada", if (colHoraEnt >= 0) c.getString(colHoraEnt) else "")
-                obj.put("horaSaida", if (colHoraSai >= 0) c.getString(colHoraSai) else "")
-                arr.put(obj)
-            }
-            c.close()
-            jObj.put("entregadores", arr)
-        } catch (e: Exception) {}
-
-        try {
-            val arr = org.json.JSONArray()
-            val c = db.rawQuery("SELECT * FROM encomendas", null)
-            val colId = c.getColumnIndex("id")
-            val colRastreio = c.getColumnIndex("rastreio")
-            val colPlat = c.getColumnIndex("plataforma")
-            val colBloco = c.getColumnIndex("bloco")
-            val colApto = c.getColumnIndex("apto")
-            val colMorador = c.getColumnIndex("morador")
-            val colEntregador = c.getColumnIndex("entregador")
-            val colStatus = c.getColumnIndex("status")
-            val colDataEnt = c.getColumnIndex("dataEntrada")
-            val colHoraEnt = c.getColumnIndex("horaEntrada")
-            val colDataEntr = c.getColumnIndex("dataEntrega")
-            val colHoraEntr = c.getColumnIndex("horaEntrega")
-            val colPortEntr = c.getColumnIndex("porteiroEntrega")
-            val colAss = c.getColumnIndex("assinaturaRaw")
-            val colEntregue = c.getColumnIndex("entregue")
-            val colRecebedor = c.getColumnIndex("recebedor")
-            val colMoradorRet = c.getColumnIndex("moradorRetirou")
-            while (c.moveToNext()) {
-                val obj = org.json.JSONObject()
-                if (colId >= 0) obj.put("id", c.getInt(colId))
-                obj.put("rastreio", if (colRastreio >= 0) c.getString(colRastreio) ?: "" else "")
-                obj.put("plataforma", if (colPlat >= 0) c.getString(colPlat) ?: "" else "")
-                obj.put("bloco", if (colBloco >= 0) c.getString(colBloco) ?: "" else "")
-                obj.put("apto", if (colApto >= 0) c.getString(colApto) ?: "" else "")
-                obj.put("morador", if (colMorador >= 0) c.getString(colMorador) ?: "" else "")
-                obj.put("entregador", if (colEntregador >= 0) c.getString(colEntregador) ?: "" else "")
-                val statusVal = if (colStatus >= 0) c.getString(colStatus) ?: "Recebido" else "Recebido"
-                obj.put("status", statusVal)
-                obj.put("dataEntrada", if (colDataEnt >= 0) c.getString(colDataEnt) ?: "" else "")
-                obj.put("horaEntrada", if (colHoraEnt >= 0) c.getString(colHoraEnt) ?: "" else "")
-                val dtEntrega = if (colDataEntr >= 0) c.getString(colDataEntr) ?: "" else ""
-                val hrEntrega = if (colHoraEntr >= 0) c.getString(colHoraEntr) ?: "" else ""
-                obj.put("dataEntrega", dtEntrega)
-                obj.put("horaEntrega", hrEntrega)
-                obj.put("porteiroEntrega", if (colPortEntr >= 0) c.getString(colPortEntr) ?: "" else "")
-                obj.put("assinaturaRaw", if (colAss >= 0) c.getString(colAss) ?: "" else "")
-                if (colEntregue >= 0) {
-                    obj.put("entregue", c.getInt(colEntregue) == 1 || c.getString(colEntregue).equals("true", ignoreCase = true))
-                } else if (statusVal.equals("Entregue", ignoreCase = true) || dtEntrega.isNotBlank()) {
-                    obj.put("entregue", true)
+            if (morTable != null) {
+                val arr = org.json.JSONArray()
+                val c = db.rawQuery("SELECT * FROM $morTable", null)
+                val colNome = getCursorCol(c, "nome", "morador", "nomeMorador")
+                val colBloco = getCursorCol(c, "bloco")
+                val colApto = getCursorCol(c, "apto", "apartamento")
+                while (c.moveToNext()) {
+                    val obj = org.json.JSONObject()
+                    val nome = if (colNome >= 0) c.getString(colNome) ?: "" else ""
+                    val bloco = if (colBloco >= 0) c.getString(colBloco) ?: "" else ""
+                    val apto = if (colApto >= 0) c.getString(colApto) ?: "" else ""
+                    if (nome.isNotBlank()) {
+                        obj.put("nome", nome)
+                        obj.put("bloco", bloco)
+                        obj.put("apto", apto)
+                        arr.put(obj)
+                    }
                 }
-                if (colRecebedor >= 0) obj.put("recebedor", c.getString(colRecebedor) ?: "")
-                if (colMoradorRet >= 0) obj.put("moradorRetirou", c.getString(colMoradorRet) ?: "")
-                arr.put(obj)
+                c.close()
+                jObj.put("moradores", arr)
             }
-            c.close()
-            jObj.put("encomendas", arr)
+        } catch (e: Exception) {}
+
+        // 2. Porteiros
+        try {
+            val porTable = when {
+                tables.contains("porteiros") -> "porteiros"
+                tables.contains("porteiro") -> "porteiro"
+                else -> null
+            }
+            if (porTable != null) {
+                val arr = org.json.JSONArray()
+                val c = db.rawQuery("SELECT * FROM $porTable", null)
+                val colNome = getCursorCol(c, "nome", "porteiro")
+                val colTurno = getCursorCol(c, "turno")
+                val colTurnoIni = getCursorCol(c, "turnoInicio")
+                val colTurnoFim = getCursorCol(c, "turnoFim")
+                val colDia = getCursorCol(c, "dia")
+                val colDataIni = getCursorCol(c, "dataInicio")
+                val colBloco = getCursorCol(c, "bloco")
+                while (c.moveToNext()) {
+                    val obj = org.json.JSONObject()
+                    val nome = if (colNome >= 0) c.getString(colNome) ?: "" else ""
+                    if (nome.isNotBlank()) {
+                        obj.put("nome", nome)
+                        obj.put("turno", if (colTurno >= 0) c.getString(colTurno) ?: "Manhã" else "Manhã")
+                        obj.put("turnoInicio", if (colTurnoIni >= 0) c.getString(colTurnoIni) ?: "" else "")
+                        obj.put("turnoFim", if (colTurnoFim >= 0) c.getString(colTurnoFim) ?: "" else "")
+                        obj.put("dia", if (colDia >= 0) c.getString(colDia) ?: "" else "")
+                        obj.put("dataInicio", if (colDataIni >= 0) c.getString(colDataIni) ?: "" else "")
+                        obj.put("bloco", if (colBloco >= 0) c.getString(colBloco) ?: "" else "")
+                        arr.put(obj)
+                    }
+                }
+                c.close()
+                jObj.put("porteiros", arr)
+            }
+        } catch (e: Exception) {}
+
+        // 3. Entregadores
+        try {
+            val entTable = when {
+                tables.contains("entregadores") -> "entregadores"
+                tables.contains("entregador") -> "entregador"
+                else -> null
+            }
+            if (entTable != null) {
+                val arr = org.json.JSONArray()
+                val c = db.rawQuery("SELECT * FROM $entTable", null)
+                val colNome = getCursorCol(c, "nome", "entregador")
+                val colEmpresa = getCursorCol(c, "empresa")
+                val colDia = getCursorCol(c, "dia")
+                val colDataIni = getCursorCol(c, "dataInicio")
+                val colHoraEnt = getCursorCol(c, "horaEntrada")
+                val colHoraSai = getCursorCol(c, "horaSaida")
+                while (c.moveToNext()) {
+                    val obj = org.json.JSONObject()
+                    val nome = if (colNome >= 0) c.getString(colNome) ?: "" else ""
+                    if (nome.isNotBlank()) {
+                        obj.put("nome", nome)
+                        obj.put("empresa", if (colEmpresa >= 0) c.getString(colEmpresa) ?: "" else "")
+                        obj.put("dia", if (colDia >= 0) c.getString(colDia) ?: "" else "")
+                        obj.put("dataInicio", if (colDataIni >= 0) c.getString(colDataIni) ?: "" else "")
+                        obj.put("horaEntrada", if (colHoraEnt >= 0) c.getString(colHoraEnt) ?: "" else "")
+                        obj.put("horaSaida", if (colHoraSai >= 0) c.getString(colHoraSai) ?: "" else "")
+                        arr.put(obj)
+                    }
+                }
+                c.close()
+                jObj.put("entregadores", arr)
+            }
+        } catch (e: Exception) {}
+
+        // 4. Encomendas
+        try {
+            val encTable = when {
+                tables.contains("encomendas") -> "encomendas"
+                tables.contains("encomenda") -> "encomenda"
+                tables.contains("correspondencias") -> "correspondencias"
+                tables.contains("entregas") -> "entregas"
+                tables.contains("pacotes") -> "pacotes"
+                else -> null
+            }
+            if (encTable != null) {
+                val arr = org.json.JSONArray()
+                val c = db.rawQuery("SELECT * FROM $encTable", null)
+                val colId = getCursorCol(c, "id", "_id", "codigoId")
+                val colRastreio = getCursorCol(c, "rastreio", "codigo", "codBarras", "cod_barras", "codigoRastreio", "codigo_rastreio")
+                val colPlat = getCursorCol(c, "plataforma", "empresa", "origem", "tipo")
+                val colBloco = getCursorCol(c, "bloco")
+                val colApto = getCursorCol(c, "apto", "apartamento")
+                val colMorador = getCursorCol(c, "morador", "destinatario", "nome")
+                val colEntregador = getCursorCol(c, "entregador")
+                val colStatus = getCursorCol(c, "status", "situacao")
+                val colDataEnt = getCursorCol(c, "dataEntrada", "data_entrada", "data", "criadoEm", "dataCriacao")
+                val colHoraEnt = getCursorCol(c, "horaEntrada", "hora_entrada", "hora")
+                val colDataEntr = getCursorCol(c, "dataEntrega", "data_entrega", "dataBaixa", "data_baixa")
+                val colHoraEntr = getCursorCol(c, "horaEntrega", "hora_entrega", "horaBaixa", "hora_baixa")
+                val colPortEntr = getCursorCol(c, "porteiroEntrega", "porteiro_entrega", "porteiro", "porteiroBaixa")
+                val colAss = getCursorCol(c, "assinaturaRaw", "assinatura", "assinatura_recebedor")
+                val colObs = getCursorCol(c, "observacao", "observacoes", "obs")
+                val colEntregue = getCursorCol(c, "entregue", "baixado")
+                val colRecebedor = getCursorCol(c, "recebedor")
+                val colMoradorRet = getCursorCol(c, "moradorRetirou")
+
+                val todayIso = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+
+                while (c.moveToNext()) {
+                    val obj = org.json.JSONObject()
+                    val idVal = if (colId >= 0 && c.getInt(colId) > 0) c.getInt(colId) else (c.position + 1)
+                    obj.put("id", idVal)
+
+                    val rastreio = if (colRastreio >= 0) c.getString(colRastreio) ?: "" else ""
+                    val plat = if (colPlat >= 0) c.getString(colPlat) ?: "" else ""
+                    val bloco = if (colBloco >= 0) c.getString(colBloco) ?: "" else ""
+                    val apto = if (colApto >= 0) c.getString(colApto) ?: "" else ""
+                    val morador = if (colMorador >= 0) c.getString(colMorador) ?: "" else ""
+                    val entregador = if (colEntregador >= 0) c.getString(colEntregador) ?: "" else ""
+                    val rawStatus = if (colStatus >= 0) c.getString(colStatus)?.trim() ?: "" else ""
+                    val dtEntrRaw = if (colDataEntr >= 0) c.getString(colDataEntr)?.trim() ?: "" else ""
+                    val hrEntrRaw = if (colHoraEntr >= 0) c.getString(colHoraEntr)?.trim() ?: "" else ""
+                    val portEntr = if (colPortEntr >= 0) c.getString(colPortEntr)?.trim() ?: "" else ""
+                    val assRaw = if (colAss >= 0) c.getString(colAss)?.trim() ?: "" else ""
+                    val obs = if (colObs >= 0) c.getString(colObs) ?: "" else ""
+                    val rec = if (colRecebedor >= 0) c.getString(colRecebedor) ?: "" else ""
+                    val morRet = if (colMoradorRet >= 0) c.getString(colMoradorRet) ?: "" else ""
+
+                    val isEntregue = rawStatus.equals("Entregue", ignoreCase = true) ||
+                                     rawStatus.equals("Baixado", ignoreCase = true) ||
+                                     rawStatus.equals("Finalizado", ignoreCase = true) ||
+                                     rawStatus == "1" ||
+                                     rawStatus.equals("true", ignoreCase = true) ||
+                                     (colEntregue >= 0 && (c.getInt(colEntregue) == 1 || c.getString(colEntregue).equals("true", ignoreCase = true))) ||
+                                     dtEntrRaw.isNotBlank() ||
+                                     hrEntrRaw.isNotBlank() ||
+                                     portEntr.isNotBlank() ||
+                                     assRaw.isNotBlank() ||
+                                     rec.isNotBlank() ||
+                                     morRet.isNotBlank()
+
+                    val statusVal = if (isEntregue) "Entregue" else "Recebido"
+
+                    var dtEntRaw = if (colDataEnt >= 0) c.getString(colDataEnt)?.trim() ?: "" else ""
+                    if (dtEntRaw.isBlank()) {
+                        dtEntRaw = if (dtEntrRaw.isNotBlank()) dtEntrRaw else todayIso
+                    }
+                    val dataEntrada = normalizeToIsoDate(dtEntRaw)
+
+                    val hrEntRaw = if (colHoraEnt >= 0) c.getString(colHoraEnt)?.trim() ?: "" else ""
+                    val horaEntrada = if (hrEntRaw.isNotBlank()) hrEntRaw else "12:00:00"
+
+                    val dataEntrega = if (dtEntrRaw.isNotBlank()) normalizeToIsoDate(dtEntrRaw) else ""
+                    val horaEntrega = hrEntrRaw
+
+                    obj.put("rastreio", rastreio)
+                    obj.put("plataforma", plat)
+                    obj.put("bloco", bloco)
+                    obj.put("apto", apto)
+                    obj.put("morador", morador)
+                    obj.put("entregador", entregador)
+                    obj.put("status", statusVal)
+                    obj.put("entregue", isEntregue)
+                    obj.put("dataEntrada", dataEntrada)
+                    obj.put("horaEntrada", horaEntrada)
+                    obj.put("dataEntrega", dataEntrega)
+                    obj.put("horaEntrega", horaEntrega)
+                    obj.put("porteiroEntrega", if (portEntr.isNotBlank()) portEntr else rec)
+                    obj.put("assinaturaRaw", assRaw)
+                    obj.put("observacao", obs)
+                    if (rec.isNotBlank()) obj.put("recebedor", rec)
+                    if (morRet.isNotBlank()) obj.put("moradorRetirou", morRet)
+
+                    arr.put(obj)
+                }
+                c.close()
+                jObj.put("encomendas", arr)
+            }
         } catch (e: Exception) {}
 
         return jObj
@@ -1893,73 +2082,60 @@ class AndroidDBInterface(
                 totalEnc++
                 val enc = inEncomendas.getJSONObject(i)
                 val inRastreio = enc.optString("rastreio", "").trim().uppercase()
-                val inId = enc.optInt("id", 0)
                 val inBloco = enc.optString("bloco", "").trim().uppercase()
                 val inApto = enc.optString("apto", "").trim()
                 val inDtEnt = enc.optString("dataEntrada", "").trim()
+                val inHrEnt = enc.optString("horaEntrada", "").trim()
                 val inMorador = enc.optString("morador", "").trim().lowercase()
                 val incomingComBaixa = hasBaixa(enc)
+                val isTrackingValid = inRastreio.isNotEmpty() && inRastreio != "SN" && inRastreio != "S/N" && inRastreio != "0" && inRastreio != "-"
 
                 var matchIdx: Int? = null
-                
-                // 1. Try match by ID first (strongest key)
-                if (inId > 0) {
-                    for (j in 0 until currEncomendas.length()) {
-                        if (currEncomendas.getJSONObject(j).optInt("id", 0) == inId) {
-                            matchIdx = j
-                            break
-                        }
-                    }
-                }
 
-                // 2. If no ID match, try other criteria (Rastreio, Bloco/Apto/Data)
-                if (matchIdx == null) {
-                    for (j in 0 until currEncomendas.length()) {
-                        val curr = currEncomendas.getJSONObject(j)
-                        val currRastreio = curr.optString("rastreio", "").trim().uppercase()
-                        val currBloco = curr.optString("bloco", "").trim().uppercase()
-                        val currApto = curr.optString("apto", "").trim()
-                        val currDtEnt = curr.optString("dataEntrada", "").trim()
-                        val currMorador = curr.optString("morador", "").trim().lowercase()
-                        
-                        var isMatch = false
-                        
-                        // Match by Rastreio (if valid)
-                        if (inRastreio.isNotEmpty() && inRastreio != "SN" && inRastreio != "S/N" && 
-                            inRastreio != "0" && currRastreio == inRastreio) {
-                            isMatch = true
-                        }
-                        // Match by Bloco/Apto/DataEntrada
-                        else if (currBloco == inBloco && currApto == inApto && currDtEnt == inDtEnt) {
-                            if (inMorador.isEmpty() || currMorador.isEmpty() || currMorador == inMorador) {
+                // Search in currEncomendas by business identity ONLY (never by arbitrary auto-increment ID)
+                for (j in 0 until currEncomendas.length()) {
+                    val curr = currEncomendas.getJSONObject(j)
+                    val currRastreio = curr.optString("rastreio", "").trim().uppercase()
+                    val currBloco = curr.optString("bloco", "").trim().uppercase()
+                    val currApto = curr.optString("apto", "").trim()
+                    val currDtEnt = curr.optString("dataEntrada", "").trim()
+                    val currHrEnt = curr.optString("horaEntrada", "").trim()
+                    val currMorador = curr.optString("morador", "").trim().lowercase()
+
+                    var isMatch = false
+                    if (isTrackingValid && currRastreio == inRastreio) {
+                        isMatch = true
+                    } else if (inBloco.isNotEmpty() && inApto.isNotEmpty() && inDtEnt.isNotEmpty() &&
+                               currBloco == inBloco && currApto == inApto && currDtEnt == inDtEnt) {
+                        if (inHrEnt.isEmpty() || currHrEnt.isEmpty() || inHrEnt == currHrEnt) {
+                            if (inMorador.isEmpty() || currMorador.isEmpty() || inMorador == currMorador) {
                                 isMatch = true
                             }
                         }
-                        
-                        if (isMatch) {
-                            // If pending and incoming has baixa, this is a strong match
-                            if (isPendente(curr) && incomingComBaixa) {
-                                matchIdx = j
-                                break 
-                            } else if (matchIdx == null) {
-                                matchIdx = j 
-                            }
+                    }
+
+                    if (isMatch) {
+                        if (isPendente(curr) && incomingComBaixa) {
+                            matchIdx = j
+                            break
+                        } else if (matchIdx == null) {
+                            matchIdx = j
                         }
                     }
                 }
 
                 if (matchIdx == null) {
-                    val assignedId = if (inId > 0 && !idToIdx.containsKey(inId)) {
-                        if (inId > maxId) maxId = inId
-                        inId
+                    // NEW ENCOMENDA: Always add to database with fresh unique ID
+                    maxId++
+                    enc.put("id", maxId)
+                    if (incomingComBaixa) {
+                        enc.put("status", "Entregue")
+                        enc.put("entregue", true)
                     } else {
-                        maxId++
-                        maxId
+                        enc.put("status", "Recebido")
+                        enc.put("entregue", false)
                     }
-                    enc.put("id", assignedId)
-                    val newIdx = currEncomendas.length()
                     currEncomendas.put(enc)
-                    idToIdx[assignedId] = newIdx
                     addEnc++
 
                     val plat = enc.optString("plataforma", "").trim()
@@ -1972,9 +2148,8 @@ class AndroidDBInterface(
                     val existingEnc = currEncomendas.getJSONObject(matchIdx)
                     val existingPendente = isPendente(existingEnc)
 
-                    // Always replace/update if pending and incoming has baixa, OR just update details
                     if (existingPendente && incomingComBaixa) {
-                        val existingId = existingEnc.optInt("id", if (inId > 0) inId else maxId)
+                        val existingId = existingEnc.optInt("id", maxId)
                         val keys = enc.keys()
                         while (keys.hasNext()) {
                             val k = keys.next()
@@ -1987,19 +2162,16 @@ class AndroidDBInterface(
                         existingEnc.put("entregue", true)
 
                         if (existingEnc.optString("dataEntrega", "").isBlank()) {
-                            val todayIso = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
-                            existingEnc.put("dataEntrega", todayIso)
+                            existingEnc.put("dataEntrega", enc.optString("dataEntrega", ""))
                         }
                         if (existingEnc.optString("horaEntrega", "").isBlank()) {
-                            val nowTime = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
-                            existingEnc.put("horaEntrega", nowTime)
+                            existingEnc.put("horaEntrega", enc.optString("horaEntrega", ""))
                         }
 
                         currEncomendas.put(matchIdx, existingEnc)
                         substituidasBaixaEnc++
                         addEnc++
-                    } else if (incomingComBaixa) {
-                        // Already delivered, preserve and enrich exact date/time from incoming backup
+                    } else {
                         if (existingEnc.optString("dataEntrega", "").isBlank() && enc.optString("dataEntrega", "").isNotBlank()) {
                             existingEnc.put("dataEntrega", enc.optString("dataEntrega"))
                         }
@@ -2012,9 +2184,10 @@ class AndroidDBInterface(
                         if (existingEnc.optString("porteiroEntrega", "").isBlank() && enc.optString("porteiroEntrega", "").isNotBlank()) {
                             existingEnc.put("porteiroEntrega", enc.optString("porteiroEntrega"))
                         }
+                        if (existingEnc.optString("observacao", "").isBlank() && enc.optString("observacao", "").isNotBlank()) {
+                            existingEnc.put("observacao", enc.optString("observacao"))
+                        }
                         currEncomendas.put(matchIdx, existingEnc)
-                        skipEnc++
-                    } else {
                         skipEnc++
                     }
                 }
