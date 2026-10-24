@@ -704,17 +704,86 @@ class AndroidShareInterface(private val context: Context) {
         val activity = findActivity(context)
         activity?.runOnUiThread {
             try {
-                val streamType = android.media.AudioManager.STREAM_MUSIC
-                val toneType = if (isError) {
-                    android.media.ToneGenerator.TONE_PROP_BEEP2
+                if (isError) {
+                    val streamType = android.media.AudioManager.STREAM_MUSIC
+                    val toneGen = android.media.ToneGenerator(streamType, 100)
+                    toneGen.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 350)
                 } else {
-                    android.media.ToneGenerator.TONE_PROP_BEEP
+                    playShortWhistleSound()
                 }
-                val toneGen = android.media.ToneGenerator(streamType, 100)
-                toneGen.startTone(toneType, if (isError) 350 else 180)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    private fun playShortWhistleSound() {
+        try {
+            val sampleRate = 44100
+            val durationMs = 110
+            val numSamples = (durationMs * sampleRate) / 1000
+            val buffer = ShortArray(numSamples)
+            val twoPi = 2.0 * Math.PI
+            
+            // Frequências harmônicas que formam o som característico de apito curto agudo
+            val baseFreq = 2800.0
+            val harmonicFreq = 2960.0
+            
+            val attackSamples = (0.008 * sampleRate).toInt()
+            val releaseSamples = (0.025 * sampleRate).toInt()
+            
+            var phase1 = 0.0
+            var phase2 = 0.0
+            
+            for (i in 0 until numSamples) {
+                val progress = i.toDouble() / numSamples
+                // Ligeira modulação inicial de sopro de apito
+                val pitchMod = if (progress < 0.25) (1.0 + (0.25 - progress) * 0.12) else 1.0
+                val f1 = baseFreq * pitchMod
+                val f2 = harmonicFreq * pitchMod
+                
+                phase1 += (twoPi * f1) / sampleRate
+                phase2 += (twoPi * f2) / sampleRate
+                
+                val env = when {
+                    i < attackSamples -> i.toDouble() / attackSamples
+                    i > numSamples - releaseSamples -> (numSamples - i).toDouble() / releaseSamples
+                    else -> 1.0
+                }
+                
+                // Combinação das duas ondas para o timbre ressonante de apito
+                val wave = (0.65 * Math.sin(phase1) + 0.35 * Math.sin(phase2)) * env
+                buffer[i] = (wave * Short.MAX_VALUE * 0.88).toInt().toShort()
+            }
+            
+            val audioTrack = android.media.AudioTrack(
+                android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build(),
+                android.media.AudioFormat.Builder()
+                    .setSampleRate(sampleRate)
+                    .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
+                    .setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO)
+                    .build(),
+                buffer.size * 2,
+                android.media.AudioTrack.MODE_STATIC,
+                android.media.AudioManager.AUDIO_SESSION_ID_GENERATE
+            )
+            audioTrack.write(buffer, 0, buffer.size)
+            audioTrack.play()
+            
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                try {
+                    audioTrack.stop()
+                    audioTrack.release()
+                } catch (ignored: Exception) {}
+            }, 300)
+        } catch (e: Exception) {
+            try {
+                val toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 100)
+                toneGen.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 100)
+            } catch (ignored: Exception) {}
         }
     }
 
