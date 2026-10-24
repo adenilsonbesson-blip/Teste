@@ -221,11 +221,9 @@ fun SiceWebViewContainer() {
             when (event) {
                 Lifecycle.Event.ON_PAUSE -> {
                     webViewInstance?.onPause()
-                    webViewInstance?.pauseTimers()
                 }
                 Lifecycle.Event.ON_RESUME -> {
                     webViewInstance?.onResume()
-                    webViewInstance?.resumeTimers()
                 }
                 Lifecycle.Event.ON_STOP -> {
                     if (isScanning) {
@@ -618,6 +616,85 @@ class AndroidShareInterface(private val context: Context) {
                 context.startActivity(chooser)
             } catch (e: Exception) {
                 Toast.makeText(context, "Erro ao exportar planilha: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    @JavascriptInterface
+    fun exportPdf(content: String, filename: String = "Relatorio_entregas.pdf") {
+        val activity = findActivity(context)
+        activity?.runOnUiThread {
+            try {
+                val actualFileName = if (filename.isNullOrBlank()) "Relatorio_entregas.pdf" else filename
+                val cleanContent = if (content.contains(";base64,")) content.substringAfter("base64,") else content
+                val bytes = try {
+                    android.util.Base64.decode(cleanContent, android.util.Base64.DEFAULT)
+                } catch (e: Exception) {
+                    cleanContent.toByteArray(StandardCharsets.UTF_8)
+                }
+
+                // 1. Salvar no cache para o FileProvider
+                val cacheFile = File(context.cacheDir, actualFileName)
+                FileOutputStream(cacheFile).use { stream ->
+                    stream.write(bytes)
+                }
+
+                // 2. Salvar automaticamente na pasta de Downloads do dispositivo
+                var salvoEmDownloads = false
+                try {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        val contentValues = android.content.ContentValues().apply {
+                            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, actualFileName)
+                            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+                            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+                        }
+                        val contentUri = android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                        val itemUri = context.contentResolver.insert(contentUri, contentValues)
+                        if (itemUri != null) {
+                            context.contentResolver.openOutputStream(itemUri)?.use { os ->
+                                os.write(bytes)
+                            }
+                            salvoEmDownloads = true
+                        }
+                    } else {
+                        val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                        if (downloadsDir != null && (downloadsDir.exists() || downloadsDir.mkdirs())) {
+                            val downloadFile = File(downloadsDir, actualFileName)
+                            FileOutputStream(downloadFile).use { os ->
+                                os.write(bytes)
+                            }
+                            salvoEmDownloads = true
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Ignora erro de permissão externa em dispositivos restritos
+                }
+
+                val uri: Uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    cacheFile
+                )
+
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/pdf"
+                    putExtra(Intent.EXTRA_SUBJECT, "Relatório de Entregas")
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+
+                val chooser = Intent.createChooser(shareIntent, "Salvar / Compartilhar Relatório em PDF")
+                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(chooser)
+
+                val toastMsg = if (salvoEmDownloads) {
+                    "PDF com todos os registros gerado e salvo em Downloads!"
+                } else {
+                    "PDF com todos os registros gerado com sucesso!"
+                }
+                Toast.makeText(context, toastMsg, Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Erro ao exportar PDF: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             }
         }
     }

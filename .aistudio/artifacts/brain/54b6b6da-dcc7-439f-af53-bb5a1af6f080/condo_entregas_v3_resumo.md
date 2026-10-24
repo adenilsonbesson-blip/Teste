@@ -43,6 +43,9 @@
    - Normalização de blocos (unifica variações como "BLOCO A", "Bloco A", "A", etc., impedindo contagens duplicadas ou fragmentadas).
    - Exibição do cabeçalho com o mês de vigência (`Mês: Out/26`), Total de entregas do mês e percentual proporcional de cada bloco. A soma dos blocos agora bate perfeitamente (100% precisa) com o card "Entregue Mês Atual".
 
-10. **Correção de Exportação e Salvamento de PDF com Todos os Registros**:
-    - Ajuste no layout e regras `@media print`: substituída a propriedade `position: absolute` por `position: static` e ocultação via `body > *:not(#print-relatorio-pdf-container)`. Isso resolve o problema no mecanismo de impressão do Android WebView onde relatórios com muitos registros salvavam arquivos PDF em branco ou sem linhas após a primeira página devido a cálculo incorreto de altura de página.
-    - **Estilização Aprimorada do Cabeçalho de Colunas do PDF**: Cabeçalhos das tabelas atualizados para fundo cinza profissional (`#6b7280`), fonte em negrito (`font-weight: bold;`) e texto em branco para máxima legibilidade no relatório impresso ou salvo em PDF.
+10. **Geração Direta de PDF Vetorial (Sem Falhas do Spooler)**:
+    - **Solução Definitiva para o Reinício do App e PDF Vazio**: O salvamento de PDF anteriormente dependia do `PrintSpooler` nativo do Android, que congelava com a interface do WebView (`pauseTimers` em `onPause` e reinício por `onRenderProcessGone`), gerando PDFs vazios ou fechando o aplicativo.
+    - **Novo Motor de PDF Vetorial Integrado (`jsPDF` + `autoTable`)**: A geração agora ocorre 100% diretamente no aplicativo em memória de forma instantânea, sem depender do serviço de impressão externo do sistema operacional.
+    - **Inclusão de 100% dos Registros**: Todos os registros filtrados ou selecionados são renderizados no documento, com quebras de página automáticas perfeitas, numeração de páginas ("Página X"), espaçamento entre blocos e destaque em vermelho para itens com entrega pendente.
+    - **Cabeçalhos em Cinza e Negrito**: As colunas agora possuem fundo cinza moderno (`#6b7280`), fonte em negrito (`font-weight: bold;`) e texto em branco com alinhamento perfeito.
+    - **Salvamento Automático em Downloads & Menu Compartilhar**: O PDF é gravado automaticamente na pasta pública de **Downloads** do aparelho e abre o menu nativo de compartilhamento/salvamento do Android (`Intent.ACTION_SEND` / `FileProvider`), permitindo envio direto por WhatsApp, Google Drive, e-mail ou visualização imediata no leitor de PDF.

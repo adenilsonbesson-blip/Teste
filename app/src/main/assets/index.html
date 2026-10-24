@@ -8,6 +8,8 @@
     <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js" type="text/javascript"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="xlsx.full.min.js"></script>
+    <script src="jspdf.umd.min.js"></script>
+    <script src="jspdf.plugin.autotable.min.js"></script>
     <style>
         :root {
             --primary: #f97316; /* Vibrant Orange */
@@ -10141,10 +10143,8 @@ function doGet(e) {
                 const isEncFunc = (e.observacao === "Enc Func" || (e.assinaturaRaw && e.assinaturaRaw.includes("Portaria Central")));
                 return { 
                     cod_barras: formatarCodBarrasMax20(e.rastreio),
-                    data_hora: entradaFmt,
                     data_hora_entrada: entradaFmt,
                     data_hora_entrega: entregaFmt,
-                    data_entrega: entregaFmt,
                     plataforma: String(e.plataforma || '-'),
                     morador: isCentral ? '---' : String(e.morador || '-'),
                     funcionario: isCentral ? String(e.morador || '-') : (isEncFunc ? String(e.recebedor || e.moradorRetirou || '-') : '---'),
@@ -10153,14 +10153,111 @@ function doGet(e) {
                     entregador: isEncFunc ? '' : String(e.entregador || '-'),
                     porteiro: e.status === 'Recebido' ? "---" : String(e.porteiroEntrega || '-'),
                     assinatura: obterAssinaturaFormatada(e),
-                    observacao: String(e.observacao || "---")
+                    observacao: String(e.observacao || "---"),
+                    _isPendente: e.status === 'Recebido'
                 };
             });
 
             const hoje = new Date();
             const dataFmt = hoje.toLocaleDateString('pt-BR');
             const horaFmt = hoje.toLocaleTimeString('pt-BR');
+            const tituloRelatorio = "CONDOMINIO CHACARA ANALIA FRANCO - RELATORIO DE ENCOMENDAS";
+            const subtituloRelatorio = `Data: ${dataFmt} ${horaFmt} | Total de Registros: ${linhasProcessadas.length}`;
 
+            // GERAÇÃO DIRETA VIA JSPDF (100% de registros preservados, sem reiniciar o app, sem erros de spooler)
+            const jsPdfConstructor = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : (typeof jsPDF !== 'undefined' ? jsPDF : null);
+
+            if (jsPdfConstructor) {
+                try {
+                    const doc = new jsPdfConstructor({
+                        orientation: 'landscape',
+                        unit: 'pt',
+                        format: 'a4'
+                    });
+
+                    // Cabeçalho institucional
+                    doc.setFontSize(10.5);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(15, 23, 42);
+                    doc.text(tituloRelatorio, 20, 24);
+
+                    doc.setFontSize(8);
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(71, 85, 105);
+                    doc.text(subtituloRelatorio, 20, 36);
+
+                    const tableColumns = colunasDef.map(c => ({
+                        header: c.titulo,
+                        dataKey: c.id
+                    }));
+
+                    let tableRows = [];
+                    let ultimoBloco = null;
+
+                    linhasProcessadas.forEach((row) => {
+                        const blocoAtual = (row.bloco || '').toString().trim();
+                        if (ultimoBloco !== null && ultimoBloco !== blocoAtual) {
+                            tableRows.push({ _isSpacer: true });
+                        }
+                        ultimoBloco = blocoAtual;
+                        tableRows.push(row);
+                    });
+
+                    doc.autoTable({
+                        columns: tableColumns,
+                        body: tableRows,
+                        startY: 42,
+                        margin: { top: 38, right: 15, bottom: 22, left: 15 },
+                        theme: 'grid',
+                        styles: {
+                            fontSize: 7.2,
+                            cellPadding: 2,
+                            overflow: 'linebreak',
+                            lineWidth: 0.4,
+                            lineColor: [60, 60, 60],
+                            font: 'helvetica'
+                        },
+                        headStyles: {
+                            fillColor: [107, 114, 128], // Cor cinza #6b7280 profissional
+                            textColor: [255, 255, 255],
+                            fontStyle: 'bold',
+                            fontSize: 7.8,
+                            halign: 'left'
+                        },
+                        didParseCell: function(data) {
+                            if (data.row.raw && data.row.raw._isSpacer) {
+                                data.cell.styles.fillColor = [255, 255, 255];
+                                data.cell.styles.cellPadding = 1.5;
+                                data.cell.styles.lineWidth = 0;
+                                data.cell.text = '';
+                            } else if (data.row.raw && data.row.raw._isPendente) {
+                                data.cell.styles.textColor = [220, 38, 38]; // Vermelho para pendentes
+                                data.cell.styles.fontStyle = 'bold';
+                            }
+                        },
+                        didDrawPage: function(data) {
+                            const str = 'Página ' + data.pageNumber;
+                            doc.setFontSize(7);
+                            doc.setTextColor(100, 116, 139);
+                            doc.text(str, doc.internal.pageSize.width - 65, doc.internal.pageSize.height - 8);
+                        }
+                    });
+
+                    const pdfDataUri = doc.output('datauristring');
+
+                    if (typeof AndroidShare !== 'undefined' && typeof AndroidShare.exportPdf === 'function') {
+                        AndroidShare.exportPdf(pdfDataUri, 'Relatorio_entregas.pdf');
+                        return;
+                    } else {
+                        doc.save('Relatorio_entregas.pdf');
+                        return;
+                    }
+                } catch (pdfErr) {
+                    console.error("Falha ao gerar PDF com jsPDF, usando fallback:", pdfErr);
+                }
+            }
+
+            // Fallback caso jsPDF não esteja carregado
             let printContainer = document.getElementById('print-relatorio-pdf-container');
             if (!printContainer) {
                 printContainer = document.createElement('div');
@@ -10171,8 +10268,8 @@ function doGet(e) {
 
             let html = `
                 <div style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8.5pt; width: 100%;">
-                    <div style="font-weight: bold; font-size: 10pt; margin-bottom: 2px;">CONDOMINIO CHACARA ANALIA FRANCO - RELATORIO DE ENCOMENDAS</div>
-                    <div style="font-size: 8pt; margin-bottom: 4px;">Data: ${dataFmt} ${horaFmt} | Total de Registros: ${linhasProcessadas.length}</div>
+                    <div style="font-weight: bold; font-size: 10pt; margin-bottom: 2px;">${tituloRelatorio}</div>
+                    <div style="font-size: 8pt; margin-bottom: 4px;">${subtituloRelatorio}</div>
                     <table style="width: 100%; border-collapse: collapse; table-layout: auto;">
                         <thead>
                             <tr>
@@ -10183,15 +10280,14 @@ function doGet(e) {
                             ${(() => {
                                 let htmlRows = '';
                                 let ultimoBloco = null;
-                                listaDados.forEach((e, idx) => {
-                                    const row = linhasProcessadas[idx];
-                                    const blocoAtual = (e.bloco || '').toString().trim();
+                                linhasProcessadas.forEach((row) => {
+                                    const blocoAtual = (row.bloco || '').toString().trim();
                                     if (ultimoBloco !== null && ultimoBloco !== blocoAtual) {
                                         htmlRows += `<tr style="background-color: transparent;"><td colspan="${colunasDef.length}" style="border: none; height: 10px; padding: 0;">&nbsp;</td></tr>`;
                                     }
                                     ultimoBloco = blocoAtual;
 
-                                    const isPendente = e.status === 'Recebido';
+                                    const isPendente = row._isPendente;
                                     const trStyle = isPendente ? 'color: red;' : '';
                                     const tdStyle = isPendente 
                                         ? 'font-family: \'Arial Narrow\', Arial, sans-serif; font-size: 8.5pt; border: 1px solid #333; padding: 1px 3px; white-space: nowrap; line-height: 1.05; color: red;'
@@ -10199,7 +10295,7 @@ function doGet(e) {
 
                                     htmlRows += `
                                         <tr style="${trStyle}">
-                                            ${colunasDef.map(c => `<td style="${tdStyle}">${row[c.id]}</td>`).join('')}
+                                            ${colunasDef.map(c => `<td style="${tdStyle}">${row[c.id] || ''}</td>`).join('')}
                                         </tr>
                                     `;
                                 });
@@ -10208,30 +10304,11 @@ function doGet(e) {
                         </tbody>
                     </table>
                 </div>
-                <style id="dynamic-print-pdf-style">
-                    @media print {
-                        @page {
-                            size: A4 landscape;
-                            margin: 0.8cm 0.5cm 0.8cm 0.8cm;
-                        }
-                        body > *:not(#print-relatorio-pdf-container) {
-                            display: none !important;
-                        }
-                        #print-relatorio-pdf-container {
-                            display: block !important;
-                            position: static !important;
-                            width: 100% !important;
-                            height: auto !important;
-                            visibility: visible !important;
-                        }
-                        #print-relatorio-pdf-container * {
-                            visibility: visible !important;
-                        }
-                    }
-                </style>
             `;
             printContainer.innerHTML = html;
-            appPrint("Relatorio entregas.pdf", true);
+            setTimeout(() => {
+                appPrint("Relatorio entregas.pdf", true);
+            }, 200);
         }
 
         let dashClockInterval = null;
