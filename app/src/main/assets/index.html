@@ -10128,13 +10128,17 @@ function doGet(e) {
             let linhasProcessadas = listaDados.map(e => {
                 const entradaData = e.dataEntrada ? e.dataEntrada.split('-').reverse().join('/') : '';
                 const entradaHora = e.horaEntrada || '';
-                const entradaFmt = `${entradaData} ${entradaHora}`.trim() || '-';
+                const entradaFmt = (entradaData && entradaHora) 
+                    ? `${entradaData} - ${entradaHora}` 
+                    : (entradaData || entradaHora || '-');
 
                 let entregaFmt = '-';
                 if (e.dataEntrega || e.horaEntrega) {
                     const entregaData = e.dataEntrega ? e.dataEntrega.split('-').reverse().join('/') : '';
                     const entregaHora = e.horaEntrega || '';
-                    entregaFmt = `${entregaData} ${entregaHora}`.trim() || '-';
+                    entregaFmt = (entregaData && entregaHora) 
+                        ? `${entregaData} - ${entregaHora}` 
+                        : (entregaData || entregaHora || '-');
                 } else if (e.status === 'Recebido') {
                     entregaFmt = 'Pendente';
                 }
@@ -10164,7 +10168,7 @@ function doGet(e) {
             const tituloRelatorio = "CONDOMINIO CHACARA ANALIA FRANCO - RELATORIO DE ENCOMENDAS";
             const subtituloRelatorio = `Data: ${dataFmt} ${horaFmt} | Total de Registros: ${linhasProcessadas.length}`;
 
-            // GERAÇÃO DIRETA VIA JSPDF (100% de registros preservados, sem reiniciar o app, sem erros de spooler)
+            // GERAÇÃO DIRETA VIA JSPDF (100% de registros preservados, sem reiniciar o app, linhas estreitas e tudo negrito)
             const jsPdfConstructor = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : (typeof jsPDF !== 'undefined' ? jsPDF : null);
 
             if (jsPdfConstructor) {
@@ -10182,7 +10186,7 @@ function doGet(e) {
                     doc.text(tituloRelatorio, 20, 24);
 
                     doc.setFontSize(8);
-                    doc.setFont("helvetica", "normal");
+                    doc.setFont("helvetica", "bold");
                     doc.setTextColor(71, 85, 105);
                     doc.text(subtituloRelatorio, 20, 36);
 
@@ -10207,37 +10211,61 @@ function doGet(e) {
                         columns: tableColumns,
                         body: tableRows,
                         startY: 42,
-                        margin: { top: 38, right: 15, bottom: 22, left: 15 },
+                        margin: { top: 38, right: 14, bottom: 20, left: 14 },
                         theme: 'grid',
                         styles: {
-                            fontSize: 7.2,
-                            cellPadding: 2,
+                            fontSize: 6.8,
+                            cellPadding: { top: 1.0, right: 1.5, bottom: 1.0, left: 1.5 },
+                            minCellHeight: 8,
                             overflow: 'linebreak',
-                            lineWidth: 0.4,
+                            lineWidth: 0.35,
                             lineColor: [60, 60, 60],
-                            font: 'helvetica'
+                            font: 'helvetica',
+                            fontStyle: 'bold', // TUDO EM NEGRITO
+                            textColor: [15, 23, 42]
                         },
                         headStyles: {
                             fillColor: [107, 114, 128], // Cor cinza #6b7280 profissional
                             textColor: [255, 255, 255],
                             fontStyle: 'bold',
-                            fontSize: 7.8,
+                            fontSize: 7.2,
+                            cellPadding: { top: 1.8, right: 1.5, bottom: 1.8, left: 1.5 },
                             halign: 'left'
+                        },
+                        columnStyles: {
+                            cod_barras: { cellWidth: 70 },
+                            data_hora_entrada: { cellWidth: 80, halign: 'center' },
+                            data_hora_entrega: { cellWidth: 80, halign: 'center' },
+                            plataforma: { cellWidth: 54 },
+                            morador: { cellWidth: 84 },
+                            funcionario: { cellWidth: 70 },
+                            bloco: { cellWidth: 35, halign: 'center' },
+                            apto: { cellWidth: 32, halign: 'center' },
+                            entregador: { cellWidth: 72 },
+                            porteiro: { cellWidth: 72 },
+                            assinatura: { cellWidth: 82 },
+                            observacao: { cellWidth: 82 }
                         },
                         didParseCell: function(data) {
                             if (data.row.raw && data.row.raw._isSpacer) {
                                 data.cell.styles.fillColor = [255, 255, 255];
-                                data.cell.styles.cellPadding = 1.5;
+                                data.cell.styles.cellPadding = 0.5;
+                                data.cell.styles.minCellHeight = 3;
                                 data.cell.styles.lineWidth = 0;
                                 data.cell.text = '';
-                            } else if (data.row.raw && data.row.raw._isPendente) {
-                                data.cell.styles.textColor = [220, 38, 38]; // Vermelho para pendentes
-                                data.cell.styles.fontStyle = 'bold';
+                            } else {
+                                data.cell.styles.fontStyle = 'bold'; // Garante tudo em negrito
+                                if (data.row.raw && data.row.raw._isPendente) {
+                                    data.cell.styles.textColor = [220, 38, 38]; // Vermelho e negrito para pendentes
+                                } else {
+                                    data.cell.styles.textColor = [15, 23, 42]; // Preto escuro e negrito
+                                }
                             }
                         },
                         didDrawPage: function(data) {
                             const str = 'Página ' + data.pageNumber;
                             doc.setFontSize(7);
+                            doc.setFont("helvetica", "bold");
                             doc.setTextColor(100, 116, 139);
                             doc.text(str, doc.internal.pageSize.width - 65, doc.internal.pageSize.height - 8);
                         }
@@ -10267,13 +10295,13 @@ function doGet(e) {
             }
 
             let html = `
-                <div style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8.5pt; width: 100%;">
+                <div style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8pt; font-weight: bold; width: 100%;">
                     <div style="font-weight: bold; font-size: 10pt; margin-bottom: 2px;">${tituloRelatorio}</div>
-                    <div style="font-size: 8pt; margin-bottom: 4px;">${subtituloRelatorio}</div>
+                    <div style="font-size: 8pt; font-weight: bold; margin-bottom: 4px;">${subtituloRelatorio}</div>
                     <table style="width: 100%; border-collapse: collapse; table-layout: auto;">
                         <thead>
                             <tr>
-                                ${colunasDef.map(c => `<th style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8.5pt; border: 1px solid #333; padding: 2px 4px; background: #6b7280; color: #ffffff; font-weight: bold; white-space: nowrap; text-align: left;">${c.titulo}</th>`).join('')}
+                                ${colunasDef.map(c => `<th style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8pt; border: 1px solid #333; padding: 1px 3px; background: #6b7280; color: #ffffff; font-weight: bold; white-space: nowrap; text-align: left;">${c.titulo}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -10283,15 +10311,15 @@ function doGet(e) {
                                 linhasProcessadas.forEach((row) => {
                                     const blocoAtual = (row.bloco || '').toString().trim();
                                     if (ultimoBloco !== null && ultimoBloco !== blocoAtual) {
-                                        htmlRows += `<tr style="background-color: transparent;"><td colspan="${colunasDef.length}" style="border: none; height: 10px; padding: 0;">&nbsp;</td></tr>`;
+                                        htmlRows += `<tr style="background-color: transparent;"><td colspan="${colunasDef.length}" style="border: none; height: 6px; padding: 0;">&nbsp;</td></tr>`;
                                     }
                                     ultimoBloco = blocoAtual;
 
                                     const isPendente = row._isPendente;
-                                    const trStyle = isPendente ? 'color: red;' : '';
+                                    const trStyle = isPendente ? 'color: red; font-weight: bold;' : 'font-weight: bold;';
                                     const tdStyle = isPendente 
-                                        ? 'font-family: \'Arial Narrow\', Arial, sans-serif; font-size: 8.5pt; border: 1px solid #333; padding: 1px 3px; white-space: nowrap; line-height: 1.05; color: red;'
-                                        : 'font-family: \'Arial Narrow\', Arial, sans-serif; font-size: 8.5pt; border: 1px solid #333; padding: 1px 3px; white-space: nowrap; line-height: 1.05;';
+                                        ? 'font-family: \'Arial Narrow\', Arial, sans-serif; font-size: 7.5pt; font-weight: bold; border: 1px solid #333; padding: 1px 2px; white-space: nowrap; line-height: 1.0; color: red;'
+                                        : 'font-family: \'Arial Narrow\', Arial, sans-serif; font-size: 7.5pt; font-weight: bold; border: 1px solid #333; padding: 1px 2px; white-space: nowrap; line-height: 1.0; color: #000;';
 
                                     htmlRows += `
                                         <tr style="${trStyle}">
