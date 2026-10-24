@@ -10176,7 +10176,7 @@ function doGet(e) {
                     <table style="width: 100%; border-collapse: collapse; table-layout: auto;">
                         <thead>
                             <tr>
-                                ${colunasDef.map(c => `<th style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8.5pt; border: 1px solid #333; padding: 1px 3px; background: #e2e8f0; white-space: nowrap; text-align: left;">${c.titulo}</th>`).join('')}
+                                ${colunasDef.map(c => `<th style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8.5pt; border: 1px solid #333; padding: 2px 4px; background: #6b7280; color: #ffffff; font-weight: bold; white-space: nowrap; text-align: left;">${c.titulo}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -10214,18 +10214,18 @@ function doGet(e) {
                             size: A4 landscape;
                             margin: 0.8cm 0.5cm 0.8cm 0.8cm;
                         }
-                        body * {
-                            visibility: hidden !important;
-                        }
-                        #print-relatorio-pdf-container, #print-relatorio-pdf-container * {
-                            visibility: visible !important;
+                        body > *:not(#print-relatorio-pdf-container) {
+                            display: none !important;
                         }
                         #print-relatorio-pdf-container {
                             display: block !important;
-                            position: absolute;
-                            left: 0;
-                            top: 0;
-                            width: 100%;
+                            position: static !important;
+                            width: 100% !important;
+                            height: auto !important;
+                            visibility: visible !important;
+                        }
+                        #print-relatorio-pdf-container * {
+                            visibility: visible !important;
                         }
                     }
                 </style>

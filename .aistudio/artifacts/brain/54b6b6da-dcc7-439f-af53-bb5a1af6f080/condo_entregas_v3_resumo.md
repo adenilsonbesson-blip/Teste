@@ -42,3 +42,7 @@
    - Suporte a múltiplos formatos de data (ISO `YYYY-MM-DD` e brasileiro `DD/MM/YYYY`) e fallback inteligente para `dataEntrada` quando a encomenda foi entregue sem preenchimento explícito do campo secundário de data.
    - Normalização de blocos (unifica variações como "BLOCO A", "Bloco A", "A", etc., impedindo contagens duplicadas ou fragmentadas).
    - Exibição do cabeçalho com o mês de vigência (`Mês: Out/26`), Total de entregas do mês e percentual proporcional de cada bloco. A soma dos blocos agora bate perfeitamente (100% precisa) com o card "Entregue Mês Atual".
+
+10. **Correção de Exportação e Salvamento de PDF com Todos os Registros**:
+    - Ajuste no layout e regras `@media print`: substituída a propriedade `position: absolute` por `position: static` e ocultação via `body > *:not(#print-relatorio-pdf-container)`. Isso resolve o problema no mecanismo de impressão do Android WebView onde relatórios com muitos registros salvavam arquivos PDF em branco ou sem linhas após a primeira página devido a cálculo incorreto de altura de página.
+    - **Estilização Aprimorada do Cabeçalho de Colunas do PDF**: Cabeçalhos das tabelas atualizados para fundo cinza profissional (`#6b7280`), fonte em negrito (`font-weight: bold;`) e texto em branco para máxima legibilidade no relatório impresso ou salvo em PDF.
