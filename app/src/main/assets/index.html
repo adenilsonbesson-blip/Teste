@@ -5520,30 +5520,34 @@
             }
             const isCentral = isBlocoCentral(e.bloco) || (e.observacao === "Enc Func") || (e.assinaturaRaw && e.assinaturaRaw.includes("Portaria Central"));
 
-            // Porteiro
+            // Porteiro (abreviado para Port)
             let porteiroNome = (e.porteiroEntrega || "").trim();
             if (!porteiroNome && e.assinaturaRaw) {
-                const mP = e.assinaturaRaw.match(/(?:Porteiro|Portaria):\s*([^|]+)/i);
+                const mP = e.assinaturaRaw.match(/(?:Porteiro|Portaria|Port):\s*([^|\-\n]+)/i);
                 if (mP) porteiroNome = mP[1].trim();
             }
             if (!porteiroNome) {
-                porteiroNome = isCentral ? "Portaria Central" : (obterPorteiroVinculado(e.bloco) || (db.porteiros && db.porteiros.find(p => p.bloco && p.bloco.toUpperCase() === (e.bloco || '').toUpperCase())?.nome) || `Porteiro ${e.bloco || ''}`.trim());
+                porteiroNome = isCentral ? "Central" : (obterPorteiroVinculado(e.bloco) || (db.porteiros && db.porteiros.find(p => p.bloco && p.bloco.toUpperCase() === (e.bloco || '').toUpperCase())?.nome) || `Port. ${e.bloco || ''}`.trim());
             }
 
-            // Entregador
+            // Entregador (abreviado para Entreg)
             let entregadorNome = (e.entregador || e.moradorRetirou || e.recebedor || "").trim();
             if (!entregadorNome && e.assinaturaRaw) {
-                const mE = e.assinaturaRaw.match(/(?:Entregador|Recebido por):\s*(.+)/i);
+                const mE = e.assinaturaRaw.match(/(?:Entregador|Recebido por|Entreg):\s*([^\n]+)/i);
                 if (mE) entregadorNome = mE[1].trim();
             }
             if (!entregadorNome) {
-                entregadorNome = "Identificado via QR";
+                entregadorNome = "Via QR";
             }
 
+            // Limpeza de quebras de linha para manter em linha única
+            porteiroNome = porteiroNome.replace(/[\r\n]+/g, ' ').trim();
+            entregadorNome = entregadorNome.replace(/[\r\n]+/g, ' ').trim();
+
             if (isCentral) {
-                return `Portaria: ${porteiroNome} | Recebido por: ${entregadorNome}`;
+                return `Port: ${porteiroNome} | Rec: ${entregadorNome}`;
             }
-            return `Porteiro: ${porteiroNome} | Entregador: ${entregadorNome}`;
+            return `Port: ${porteiroNome} | Entreg: ${entregadorNome}`;
         }
 
         function formatarCodBarrasMax20(cod) {
@@ -10113,14 +10117,14 @@ function doGet(e) {
             const colunasDef = [
                 { id: 'cod_barras', titulo: 'Cod.Barras' },
                 { id: 'data_hora_entrada', titulo: 'Data/Hora Entrada' },
-                { id: 'data_hora_entrega', titulo: 'Data e Hora da Entrega' },
+                { id: 'data_hora_entrega', titulo: 'Data/Hora Entrega' },
                 { id: 'plataforma', titulo: 'Plataforma' },
                 { id: 'morador', titulo: 'Morador' },
                 { id: 'funcionario', titulo: 'Funcionário' },
                 { id: 'bloco', titulo: 'Bloco' },
                 { id: 'apto', titulo: 'Apto' },
-                { id: 'entregador', titulo: 'Entregador' },
-                { id: 'porteiro', titulo: 'Porteiro' },
+                { id: 'entregador', titulo: 'Entreg.' },
+                { id: 'porteiro', titulo: 'Port.' },
                 { id: 'assinatura', titulo: 'Assinatura/QR' },
                 { id: 'observacao', titulo: 'Observação' }
             ];
@@ -10145,22 +10149,69 @@ function doGet(e) {
 
                 const isCentral = isBlocoCentral(e.bloco);
                 const isEncFunc = (e.observacao === "Enc Func" || (e.assinaturaRaw && e.assinaturaRaw.includes("Portaria Central")));
+
+                let assFormatada = obterAssinaturaFormatada(e);
+                if (assFormatada) {
+                    assFormatada = assFormatada
+                        .replace(/Porteiro:\s*/gi, "Port: ")
+                        .replace(/Entregador:\s*/gi, "Entreg: ")
+                        .replace(/Portaria Central/gi, "Port. Central")
+                        .replace(/Recebido por:\s*/gi, "Rec: ")
+                        .replace(/[\r\n]+/g, ' ')
+                        .trim();
+                }
+
                 return { 
                     cod_barras: formatarCodBarrasMax20(e.rastreio),
                     data_hora_entrada: entradaFmt,
                     data_hora_entrega: entregaFmt,
-                    plataforma: String(e.plataforma || '-'),
-                    morador: isCentral ? '---' : String(e.morador || '-'),
-                    funcionario: isCentral ? String(e.morador || '-') : (isEncFunc ? String(e.recebedor || e.moradorRetirou || '-') : '---'),
-                    bloco: String(e.bloco || '-'),
-                    apto: String(e.apto || '-'),
-                    entregador: isEncFunc ? '' : String(e.entregador || '-'),
-                    porteiro: e.status === 'Recebido' ? "---" : String(e.porteiroEntrega || '-'),
-                    assinatura: obterAssinaturaFormatada(e),
-                    observacao: String(e.observacao || "---"),
+                    plataforma: String(e.plataforma || '-').trim(),
+                    morador: isCentral ? '---' : String(e.morador || '-').replace(/[\r\n]+/g, ' ').trim(),
+                    funcionario: isCentral ? String(e.morador || '-').replace(/[\r\n]+/g, ' ').trim() : (isEncFunc ? String(e.recebedor || e.moradorRetirou || '-').replace(/[\r\n]+/g, ' ').trim() : '---'),
+                    bloco: String(e.bloco || '-').trim(),
+                    apto: String(e.apto || '-').trim(),
+                    entregador: isEncFunc ? '' : String(e.entregador || '-').replace(/[\r\n]+/g, ' ').trim(),
+                    porteiro: e.status === 'Recebido' ? "---" : String(e.porteiroEntrega || '-').replace(/[\r\n]+/g, ' ').trim(),
+                    assinatura: assFormatada || "---",
+                    observacao: String(e.observacao || "---").replace(/[\r\n]+/g, ' ').trim(),
                     _isPendente: e.status === 'Recebido'
                 };
             });
+
+            // Auto-ajuste dinâmico das larguras das colunas: Morador, Funcionário, Entregador, Assinatura/QR e Observação
+            let maxLen = {
+                morador: 10,
+                funcionario: 8,
+                entregador: 8,
+                assinatura: 26,
+                observacao: 10
+            };
+
+            linhasProcessadas.forEach(row => {
+                if (row.morador && row.morador.length > maxLen.morador) maxLen.morador = Math.min(row.morador.length, 36);
+                if (row.funcionario && row.funcionario.length > maxLen.funcionario && row.funcionario !== '---') maxLen.funcionario = Math.min(row.funcionario.length, 30);
+                if (row.entregador && row.entregador.length > maxLen.entregador) maxLen.entregador = Math.min(row.entregador.length, 30);
+                if (row.assinatura && row.assinatura.length > maxLen.assinatura) maxLen.assinatura = Math.min(row.assinatura.length, 55);
+                if (row.observacao && row.observacao.length > maxLen.observacao && row.observacao !== '---') maxLen.observacao = Math.min(row.observacao.length, 40);
+            });
+
+            // Espaço total disponível em A4 Paisagem (841.89pt - 24pt margens = 817.89pt)
+            // Colunas de largura fixa somam 364pt (cod_barras: 64, datas: 74+74, plat: 48, bloco: 30, apto: 28, port: 46)
+            // Sobram 454pt para as 5 colunas auto-ajustadas
+            const pMorador = Math.max(14, maxLen.morador);
+            const pFunc = Math.max(10, maxLen.funcionario);
+            const pEntreg = Math.max(10, maxLen.entregador);
+            const pAssinatura = Math.max(34, Math.round(maxLen.assinatura * 1.25)); // Peso reforçado para caber 'Port: ... | Entreg: ...' na mesma linha
+            const pObs = Math.max(12, maxLen.observacao);
+
+            const somaPesos = pMorador + pFunc + pEntreg + pAssinatura + pObs;
+            const espacoAutoDisponivel = 454;
+
+            const wMorador = Math.max(62, Math.round((pMorador / somaPesos) * espacoAutoDisponivel));
+            const wFunc = Math.max(46, Math.round((pFunc / somaPesos) * espacoAutoDisponivel));
+            const wEntreg = Math.max(52, Math.round((pEntreg / somaPesos) * espacoAutoDisponivel));
+            const wObs = Math.max(64, Math.round((pObs / somaPesos) * espacoAutoDisponivel));
+            const wAssinatura = espacoAutoDisponivel - (wMorador + wFunc + wEntreg + wObs);
 
             const hoje = new Date();
             const dataFmt = hoje.toLocaleDateString('pt-BR');
@@ -10168,7 +10219,7 @@ function doGet(e) {
             const tituloRelatorio = "CONDOMINIO CHACARA ANALIA FRANCO - RELATORIO DE ENCOMENDAS";
             const subtituloRelatorio = `Data: ${dataFmt} ${horaFmt} | Total de Registros: ${linhasProcessadas.length}`;
 
-            // GERAÇÃO DIRETA VIA JSPDF (100% de registros preservados, sem reiniciar o app, linhas estreitas e tudo negrito)
+            // GERAÇÃO DIRETA VIA JSPDF (Modo Paisagem, colunas auto-ajustadas, linhas estreitas e tudo negrito)
             const jsPdfConstructor = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : (typeof jsPDF !== 'undefined' ? jsPDF : null);
 
             if (jsPdfConstructor) {
@@ -10211,11 +10262,11 @@ function doGet(e) {
                         columns: tableColumns,
                         body: tableRows,
                         startY: 42,
-                        margin: { top: 38, right: 14, bottom: 20, left: 14 },
+                        margin: { top: 38, right: 12, bottom: 20, left: 12 },
                         theme: 'grid',
                         styles: {
-                            fontSize: 6.8,
-                            cellPadding: { top: 1.0, right: 1.5, bottom: 1.0, left: 1.5 },
+                            fontSize: 6.5,
+                            cellPadding: { top: 1.0, right: 1.2, bottom: 1.0, left: 1.2 },
                             minCellHeight: 8,
                             overflow: 'linebreak',
                             lineWidth: 0.35,
@@ -10228,23 +10279,23 @@ function doGet(e) {
                             fillColor: [107, 114, 128], // Cor cinza #6b7280 profissional
                             textColor: [255, 255, 255],
                             fontStyle: 'bold',
-                            fontSize: 7.2,
-                            cellPadding: { top: 1.8, right: 1.5, bottom: 1.8, left: 1.5 },
+                            fontSize: 7.0,
+                            cellPadding: { top: 1.8, right: 1.2, bottom: 1.8, left: 1.2 },
                             halign: 'left'
                         },
                         columnStyles: {
-                            cod_barras: { cellWidth: 70 },
-                            data_hora_entrada: { cellWidth: 80, halign: 'center' },
-                            data_hora_entrega: { cellWidth: 80, halign: 'center' },
-                            plataforma: { cellWidth: 54 },
-                            morador: { cellWidth: 84 },
-                            funcionario: { cellWidth: 70 },
-                            bloco: { cellWidth: 35, halign: 'center' },
-                            apto: { cellWidth: 32, halign: 'center' },
-                            entregador: { cellWidth: 72 },
-                            porteiro: { cellWidth: 72 },
-                            assinatura: { cellWidth: 82 },
-                            observacao: { cellWidth: 82 }
+                            cod_barras: { cellWidth: 64 },
+                            data_hora_entrada: { cellWidth: 74, halign: 'center' },
+                            data_hora_entrega: { cellWidth: 74, halign: 'center' },
+                            plataforma: { cellWidth: 48 },
+                            morador: { cellWidth: wMorador },
+                            funcionario: { cellWidth: wFunc },
+                            bloco: { cellWidth: 30, halign: 'center' },
+                            apto: { cellWidth: 28, halign: 'center' },
+                            entregador: { cellWidth: wEntreg },
+                            porteiro: { cellWidth: 46 },
+                            assinatura: { cellWidth: wAssinatura },
+                            observacao: { cellWidth: wObs }
                         },
                         didParseCell: function(data) {
                             if (data.row.raw && data.row.raw._isSpacer) {
@@ -10295,13 +10346,13 @@ function doGet(e) {
             }
 
             let html = `
-                <div style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8pt; font-weight: bold; width: 100%;">
+                <div style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 7.5pt; font-weight: bold; width: 100%;">
                     <div style="font-weight: bold; font-size: 10pt; margin-bottom: 2px;">${tituloRelatorio}</div>
                     <div style="font-size: 8pt; font-weight: bold; margin-bottom: 4px;">${subtituloRelatorio}</div>
-                    <table style="width: 100%; border-collapse: collapse; table-layout: auto;">
+                    <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
                         <thead>
                             <tr>
-                                ${colunasDef.map(c => `<th style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8pt; border: 1px solid #333; padding: 1px 3px; background: #6b7280; color: #ffffff; font-weight: bold; white-space: nowrap; text-align: left;">${c.titulo}</th>`).join('')}
+                                ${colunasDef.map(c => `<th style="font-family: 'Arial Narrow', Arial, sans-serif; font-size: 7.5pt; border: 1px solid #333; padding: 1px 2px; background: #6b7280; color: #ffffff; font-weight: bold; white-space: nowrap; text-align: left;">${c.titulo}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -10318,8 +10369,8 @@ function doGet(e) {
                                     const isPendente = row._isPendente;
                                     const trStyle = isPendente ? 'color: red; font-weight: bold;' : 'font-weight: bold;';
                                     const tdStyle = isPendente 
-                                        ? 'font-family: \'Arial Narrow\', Arial, sans-serif; font-size: 7.5pt; font-weight: bold; border: 1px solid #333; padding: 1px 2px; white-space: nowrap; line-height: 1.0; color: red;'
-                                        : 'font-family: \'Arial Narrow\', Arial, sans-serif; font-size: 7.5pt; font-weight: bold; border: 1px solid #333; padding: 1px 2px; white-space: nowrap; line-height: 1.0; color: #000;';
+                                        ? 'font-family: \'Arial Narrow\', Arial, sans-serif; font-size: 7pt; font-weight: bold; border: 1px solid #333; padding: 1px 2px; white-space: nowrap; line-height: 1.0; color: red;'
+                                        : 'font-family: \'Arial Narrow\', Arial, sans-serif; font-size: 7pt; font-weight: bold; border: 1px solid #333; padding: 1px 2px; white-space: nowrap; line-height: 1.0; color: #000;';
 
                                     htmlRows += `
                                         <tr style="${trStyle}">
