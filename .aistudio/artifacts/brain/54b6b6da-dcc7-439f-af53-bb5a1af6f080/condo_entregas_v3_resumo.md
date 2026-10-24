@@ -55,7 +55,7 @@
     - **Tipografia Totalmente em Negrito**: Todo o conteúdo da tabela (cabeçalhos, dados de encomendas, blocos, status e rodapé) é renderizado em **negrito** de alta nitidez e contraste.
     - **Salvamento Automático em Downloads & Menu Compartilhar**: O PDF é gravado automaticamente na pasta pública de **Downloads** do aparelho e abre o menu nativo de compartilhamento/salvamento do Android (`Intent.ACTION_SEND` / `FileProvider`), permitindo envio direto por WhatsApp, Google Drive, e-mail ou visualização imediata no leitor de PDF.
 
-11. **Novo Som de Apito Curto no Scanner de Código de Barras**:
-    - Substituição do antigo tom telefônico (DTMF) por um sinal sonoro sintetizado de **apito curto** de alta definição.
-    - Utiliza síntese harmônica de dupla frequência (2750 Hz e 2960 Hz com modulação ágil de 110ms e envelope sem cliques), produzindo o feedback acústico característico de um apito/chirp de leitor óptico profissional.
-    - Implementado tanto no motor nativo do Android (`AudioTrack` PCM) quanto no motor Web Audio (`AudioContext`), garantindo resposta instantânea e consistente no leitor de código de barras e na baixa por QR Code.
+11. **Bip Tradicional de Caixa de Supermercado (Honeywell / Zebra)**:
+    - O som do leitor de código de barras e QR Code foi calibrado para o padrão clássico e agradável dos scanners de checkout de supermercados.
+    - Utiliza tom senoidal puro a **1900 Hz** com duração ultrarrápida de **70 ms**, ataque suave de 4 ms (eliminando estalos nos alto-falantes) e volume moderado e confortável (amplitude reduzida para não incomodar ou soar estridente).
+    - Implementado tanto no motor nativo do Android (`AudioTrack` PCM mono de baixa latência) quanto no Web Audio (`AudioContext`), garantindo feedback imediato, suave e profissional a cada leitura.

@@ -706,10 +706,10 @@ class AndroidShareInterface(private val context: Context) {
             try {
                 if (isError) {
                     val streamType = android.media.AudioManager.STREAM_MUSIC
-                    val toneGen = android.media.ToneGenerator(streamType, 100)
-                    toneGen.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 350)
+                    val toneGen = android.media.ToneGenerator(streamType, 70)
+                    toneGen.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 300)
                 } else {
-                    playShortWhistleSound()
+                    playSupermarketScannerBeep()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -717,43 +717,29 @@ class AndroidShareInterface(private val context: Context) {
         }
     }
 
-    private fun playShortWhistleSound() {
+    private fun playSupermarketScannerBeep() {
         try {
             val sampleRate = 44100
-            val durationMs = 110
+            val durationMs = 70 // 70ms: bip rápido e limpo de leitor de caixa de supermercado
             val numSamples = (durationMs * sampleRate) / 1000
             val buffer = ShortArray(numSamples)
             val twoPi = 2.0 * Math.PI
+            val freq = 1900.0 // Frequência padrão de leitores de código de barras de supermercado (Honeywell / Zebra)
             
-            // Frequências harmônicas que formam o som característico de apito curto agudo
-            val baseFreq = 2800.0
-            val harmonicFreq = 2960.0
-            
-            val attackSamples = (0.008 * sampleRate).toInt()
-            val releaseSamples = (0.025 * sampleRate).toInt()
-            
-            var phase1 = 0.0
-            var phase2 = 0.0
+            val attackSamples = (0.004 * sampleRate).toInt() // 4ms ataque sem estalos
+            val releaseSamples = (0.016 * sampleRate).toInt() // 16ms decaimento suave
             
             for (i in 0 until numSamples) {
-                val progress = i.toDouble() / numSamples
-                // Ligeira modulação inicial de sopro de apito
-                val pitchMod = if (progress < 0.25) (1.0 + (0.25 - progress) * 0.12) else 1.0
-                val f1 = baseFreq * pitchMod
-                val f2 = harmonicFreq * pitchMod
-                
-                phase1 += (twoPi * f1) / sampleRate
-                phase2 += (twoPi * f2) / sampleRate
-                
+                val t = i.toDouble() / sampleRate
                 val env = when {
                     i < attackSamples -> i.toDouble() / attackSamples
                     i > numSamples - releaseSamples -> (numSamples - i).toDouble() / releaseSamples
                     else -> 1.0
                 }
                 
-                // Combinação das duas ondas para o timbre ressonante de apito
-                val wave = (0.65 * Math.sin(phase1) + 0.35 * Math.sin(phase2)) * env
-                buffer[i] = (wave * Short.MAX_VALUE * 0.88).toInt().toShort()
+                // Onda senoidal pura em volume moderado, agradável e suave (0.50)
+                val wave = Math.sin(twoPi * freq * t) * env
+                buffer[i] = (wave * Short.MAX_VALUE * 0.50).toInt().toShort()
             }
             
             val audioTrack = android.media.AudioTrack(
@@ -778,11 +764,11 @@ class AndroidShareInterface(private val context: Context) {
                     audioTrack.stop()
                     audioTrack.release()
                 } catch (ignored: Exception) {}
-            }, 300)
+            }, 250)
         } catch (e: Exception) {
             try {
-                val toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 100)
-                toneGen.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 100)
+                val toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 60)
+                toneGen.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 70)
             } catch (ignored: Exception) {}
         }
     }

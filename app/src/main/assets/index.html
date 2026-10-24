@@ -3005,41 +3005,29 @@
                     ctx.resume();
                 }
                 const now = ctx.currentTime;
-                // Dois osciladores combinados para formar o som característico de apito curto
-                const osc1 = ctx.createOscillator();
-                const osc2 = ctx.createOscillator();
+                // Bip clássico e agradável de leitor de caixa de supermercado (1900 Hz, 70ms, volume moderado)
+                const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
 
-                osc1.type = "sine";
-                // Modulação rápida de frequência de apito (2700 Hz -> 2950 Hz)
-                osc1.frequency.setValueAtTime(2700, now);
-                osc1.frequency.exponentialRampToValueAtTime(2950, now + 0.03);
-                osc1.frequency.setValueAtTime(2950, now + 0.075);
+                osc.type = "sine";
+                osc.frequency.setValueAtTime(1900, now);
 
-                osc2.type = "sine";
-                osc2.frequency.setValueAtTime(2880, now);
-                osc2.frequency.exponentialRampToValueAtTime(3120, now + 0.03);
-                osc2.frequency.setValueAtTime(3120, now + 0.075);
-
-                // Envelope de apito curto: ataque rápido (6ms), sustain curto e decay limpo (~110ms total)
+                // Envelope suave: 4ms ataque sem estalos, 50ms corpo, 16ms decaimento suave
                 gain.gain.setValueAtTime(0.001, now);
-                gain.gain.linearRampToValueAtTime(0.85, now + 0.006);
-                gain.gain.setValueAtTime(0.85, now + 0.07);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+                gain.gain.linearRampToValueAtTime(0.48, now + 0.004);
+                gain.gain.setValueAtTime(0.48, now + 0.054);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.070);
 
-                osc1.connect(gain);
-                osc2.connect(gain);
+                osc.connect(gain);
                 gain.connect(ctx.destination);
 
-                osc1.start(now);
-                osc2.start(now);
-                osc1.stop(now + 0.12);
-                osc2.stop(now + 0.12);
+                osc.start(now);
+                osc.stop(now + 0.075);
                 setTimeout(() => {
                     try { ctx.close(); } catch (e) {}
-                }, 250);
+                }, 200);
             } catch (e) {
-                console.warn("Aviso ao emitir apito:", e);
+                console.warn("Aviso ao emitir bip de supermercado:", e);
             }
         }
 
