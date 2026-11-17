@@ -274,7 +274,40 @@ fun SiceWebViewContainer() {
                     // Search and clean vestigial temporary files from uninstalled versions while preserving active database
                     cleanLegacyTracesAndSanitizeStorage(activityContext)
                     
-                    WebView(activityContext).apply {
+                    object : WebView(activityContext) {
+                        override fun onCreateInputConnection(outAttrs: android.view.inputmethod.EditorInfo?): android.view.inputmethod.InputConnection? {
+                            val ic = super.onCreateInputConnection(outAttrs) ?: return null
+                            if (outAttrs != null) {
+                                val inputClass = outAttrs.inputType and android.text.InputType.TYPE_MASK_CLASS
+                                if (inputClass == android.text.InputType.TYPE_CLASS_TEXT) {
+                                    val variation = outAttrs.inputType and android.text.InputType.TYPE_MASK_VARIATION
+                                    val isSensitiveOrEmail =
+                                        variation == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+                                        variation == android.text.InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
+                                        variation == android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
+                                        variation == android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
+                                        variation == android.text.InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
+                                    if (!isSensitiveOrEmail) {
+                                        outAttrs.inputType = (outAttrs.inputType and
+                                            android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS.inv() and
+                                            android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES.inv()) or
+                                            android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+                                        outAttrs.initialCapsMode = android.text.TextUtils.CAP_MODE_CHARACTERS
+                                        return object : android.view.inputmethod.InputConnectionWrapper(ic, true) {
+                                            override fun getCursorCapsMode(reqModes: Int): Int {
+                                                return if ((reqModes and android.text.TextUtils.CAP_MODE_CHARACTERS) != 0) {
+                                                    android.text.TextUtils.CAP_MODE_CHARACTERS
+                                                } else {
+                                                    super.getCursorCapsMode(reqModes)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            return ic
+                        }
+                    }.apply {
                         webViewInstance = this
                         layoutParams = ViewGroup.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -387,7 +420,9 @@ fun SiceWebViewContainer() {
                             ): Boolean {
                                 val activity = findActivity(context)
                                 if (activity != null) {
-                                    val input = android.widget.EditText(activity)
+                                    val input = android.widget.EditText(activity).apply {
+                                        inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+                                    }
                                     input.setText(defaultValue)
                                     android.app.AlertDialog.Builder(activity)
                                         .setTitle("Entrada")

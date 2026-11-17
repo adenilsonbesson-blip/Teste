@@ -1056,14 +1056,20 @@
                                 <button type="button" id="btn-editar-rastreio" onclick="liberarDigitacaoManualRastreio()" style="width: 40px; min-width: 40px; height: 38px; display: flex; align-items: center; justify-content: center; padding: 0; background-color: var(--primary); border: none; border-radius: 0.375rem; color: white; flex-shrink: 0;" title="Digitar Manualmente">✏️</button>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label>Plataforma</label>
-                            <div style="display: flex; gap: 0.35rem; align-items: center; width: 100%;">
-                                <div style="position: relative; flex: 1; min-width: 0;">
-                                    <input type="text" id="enc-plataforma-select" placeholder="Selecione ou digite..." required autocomplete="off" inputmode="text" style="width: 100%; padding: 0.52rem; border: 1px solid var(--border); border-radius: 0.375rem; font-size: 0.88rem; outline: none; background: var(--bg-card); color: var(--text-main); text-transform: uppercase;" oninput="this.value = this.value.toUpperCase(); filtrarPlataformasCustom()" onfocus="filtrarPlataformasCustom()" onblur="setTimeout(() => document.getElementById('custom-datalist-plataformas').style.display='none', 200)" onkeydown="if(event.key === 'Enter' || event.keyCode === 13){ event.preventDefault(); document.getElementById('custom-datalist-plataformas').style.display='none'; const bEl = document.getElementById('enc-bloco'); if(bEl) bEl.focus(); }">
-                                    <div id="custom-datalist-plataformas" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background-color: #1e293b; color: #ffffff; border: 2px solid #f97316; border-radius: 8px; max-height: 180px; overflow-y: auto; z-index: 9999; box-shadow: 0 4px 10px rgba(0,0,0,0.5); margin-top: 4px;"></div>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: nowrap; width: 100%; align-items: flex-start;">
+                            <div class="form-group" style="flex: 1; min-width: 0;">
+                                <label>Plataforma</label>
+                                <div style="display: flex; gap: 0.35rem; align-items: center; width: 100%;">
+                                    <div style="position: relative; flex: 1; min-width: 0;">
+                                        <input type="text" id="enc-plataforma-select" placeholder="Selecione ou digite..." required autocomplete="off" inputmode="text" style="width: 100%; padding: 0.52rem; border: 1px solid var(--border); border-radius: 0.375rem; font-size: 0.88rem; outline: none; background: var(--bg-card); color: var(--text-main); text-transform: uppercase;" oninput="this.value = this.value.toUpperCase(); filtrarPlataformasCustom()" onfocus="filtrarPlataformasCustom()" onblur="setTimeout(() => document.getElementById('custom-datalist-plataformas').style.display='none', 200)" onkeydown="if(event.key === 'Enter' || event.keyCode === 13){ event.preventDefault(); document.getElementById('custom-datalist-plataformas').style.display='none'; const bEl = document.getElementById('enc-bloco'); if(bEl) bEl.focus(); }">
+                                        <div id="custom-datalist-plataformas" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background-color: #1e293b; color: #ffffff; border: 2px solid #f97316; border-radius: 8px; max-height: 180px; overflow-y: auto; z-index: 9999; box-shadow: 0 4px 10px rgba(0,0,0,0.5); margin-top: 4px;"></div>
+                                    </div>
+                                    <button type="button" id="btn-add-plataforma" onclick="event.preventDefault(); abrirModalCadastro('plataforma', true);" style="width: 40px; min-width: 40px; height: 38px; display: flex; align-items: center; justify-content: center; padding: 0; background-color: var(--primary); font-size: 1.25rem; font-weight: bold; border-radius: 0.375rem; color: white; flex-shrink: 0;" title="Adicionar Nova Plataforma">+</button>
                                 </div>
-                                <button type="button" id="btn-add-plataforma" onclick="event.preventDefault(); abrirModalCadastro('plataforma', true);" style="width: 40px; min-width: 40px; height: 38px; display: flex; align-items: center; justify-content: center; padding: 0; background-color: var(--primary); font-size: 1.25rem; font-weight: bold; border-radius: 0.375rem; color: white; flex-shrink: 0;" title="Adicionar Nova Plataforma">+</button>
+                            </div>
+                            <div class="form-group" style="width: 86px; flex-shrink: 0;">
+                                <label for="enc-volume">Volume</label>
+                                <input type="number" id="enc-volume" value="1" min="1" step="1" inputmode="numeric" required style="text-align: center; padding: 0.85rem 0.4rem !important;" onfocus="this.select()" oninput="this.value = this.value.replace(/[^0-9]/g, '');" onblur="if(!this.value || parseInt(this.value, 10) < 1) this.value = '1';" onkeydown="if(event.key === 'Enter' || event.keyCode === 13){ event.preventDefault(); const bEl = document.getElementById('enc-bloco'); if(bEl) bEl.focus(); }">
                             </div>
                         </div>
                         <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; width: 100%;">
@@ -4194,6 +4200,8 @@
             document.getElementById('enc-rastreio').value = "";
             resetRastreioInput();
             document.getElementById('enc-plataforma-select').value = "";
+            const volLimpar = document.getElementById('enc-volume');
+            if (volLimpar) volLimpar.value = "1";
             document.getElementById('ai-platform-badge').innerText = "Scanner Pronto";
             
             const lblDest = document.getElementById('label-destinatario-entrada');
@@ -4212,6 +4220,8 @@
         function prepareEntrada() {
             limitEntradasRecentes = 30;
             document.getElementById('form-encomenda').reset();
+            const volPrep = document.getElementById('enc-volume');
+            if (volPrep) volPrep.value = "1";
             document.getElementById('barcode-input').value = "";
             document.getElementById('enc-rastreio').value = "";
             resetRastreioInput();
@@ -4367,6 +4377,10 @@
             const maxId = db.encomendas.reduce((max, cur) => (cur.id && cur.id > max) ? cur.id : max, 1000);
             const nextId = maxId + 1;
 
+            const volInput = document.getElementById('enc-volume');
+            const volumeQtd = Math.max(1, parseInt(volInput ? volInput.value : '1', 10) || 1);
+            const obsVolume = volumeQtd > 1 ? `${volumeQtd} volumes` : "";
+
             const item = {
                 id: nextId,
                 rastreio: document.getElementById('enc-rastreio').value,
@@ -4379,7 +4393,7 @@
                 dataEntrada: dataISO,
                 horaEntrada: hoje.toLocaleTimeString('pt-BR'),
                 dataEntrega: "", horaEntrega: "", porteiroEntrega: "", assinaturaRaw: "",
-                observacao: ""
+                observacao: obsVolume
             };
             db.encomendas.unshift(item);
             saveStorage();
@@ -5463,18 +5477,25 @@
                     db.encomendas[idx].dataEntrega = dataISO;
                     db.encomendas[idx].horaEntrega = horaAtual;
                     db.encomendas[idx].assinaturaRaw = assinaturaFinal;
+                    const obsExistente = (db.encomendas[idx].observacao || "").trim();
                     if (isCentral) {
                         db.encomendas[idx].entregador = "";
                         db.encomendas[idx].recebedor = entregadorFinal;
                         db.encomendas[idx].moradorRetirou = entregadorFinal;
-                        db.encomendas[idx].observacao = "Enc Func";
+                        db.encomendas[idx].observacao = (obsExistente && obsExistente !== "Enc Func")
+                            ? `Enc Func (${obsExistente})`
+                            : "Enc Func";
                     } else {
                         if (entregadorFinal) {
                             db.encomendas[idx].entregador = entregadorFinal;
                         }
                         db.encomendas[idx].recebedor = entregadorFinal;
                         db.encomendas[idx].moradorRetirou = entregadorFinal;
-                        db.encomendas[idx].observacao = observacaoValor || "";
+                        if (observacaoValor && obsExistente && !obsExistente.toLowerCase().includes(observacaoValor.toLowerCase())) {
+                            db.encomendas[idx].observacao = `${obsExistente} | ${observacaoValor}`;
+                        } else {
+                            db.encomendas[idx].observacao = observacaoValor || obsExistente || "";
+                        }
                     }
                 }
             });
@@ -11425,6 +11446,24 @@ function doGet(e) {
                     } catch(err) {}
                 }
             }, true);
+
+            // Garantir que o teclado exiba letras maiúsculas em campos de texto (exceto senhas/emails/números)
+            const configurarTecladoMaiusculo = function(el) {
+                if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA')) return;
+                if (el.tagName === 'INPUT') {
+                    const t = (el.type || 'text').toLowerCase();
+                    if (['password', 'email', 'number', 'tel', 'date', 'time', 'datetime-local', 'month', 'week', 'color', 'range', 'file', 'hidden', 'checkbox', 'radio', 'button', 'submit', 'reset'].includes(t)) {
+                        return;
+                    }
+                }
+                if (el.getAttribute('autocapitalize') !== 'characters') {
+                    el.setAttribute('autocapitalize', 'characters');
+                }
+            };
+            document.querySelectorAll('input, textarea').forEach(configurarTecladoMaiusculo);
+            document.addEventListener('pointerdown', function(e) { configurarTecladoMaiusculo(e.target); }, true);
+            document.addEventListener('touchstart', function(e) { configurarTecladoMaiusculo(e.target); }, { capture: true, passive: true });
+            document.addEventListener('focusin', function(e) { configurarTecladoMaiusculo(e.target); }, true);
 
             const splashScreen = document.getElementById('splash-screen');
             if (splashScreen) {
