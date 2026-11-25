@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>CondoEntregas</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js" type="text/javascript"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="xlsx.full.min.js"></script>
@@ -2359,7 +2359,7 @@
                 <span class="close-btn" onclick="fecharModalCrachas()">&times;</span>
             </div>
             <div class="modal-body">
-                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Selecione os porteiros para gerar os crachás com QR Code para impressão.</p>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Selecione os porteiros para gerar os crachás com QR Code em arquivo PDF.</p>
                 
                 <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 1rem; text-align: left;">
                     <table style="width: 100%; min-width: 100%; border-collapse: collapse;">
@@ -2377,7 +2377,7 @@
                 
                 <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
                     <button type="button" style="background: #64748b; width: auto; padding: 0.55rem 1rem;" onclick="fecharModalCrachas()">Cancelar</button>
-                    <button type="button" class="btn-success" style="width: auto; padding: 0.55rem 1rem;" onclick="executarGeracaoCrachasPDF()">🖨️ Gerar PDF</button>
+                    <button type="button" class="btn-success" style="width: auto; padding: 0.55rem 1rem;" onclick="executarGeracaoCrachasPDF()">📄 Gerar PDF</button>
                 </div>
             </div>
         </div>
@@ -2390,7 +2390,7 @@
                 <span class="close-btn" onclick="fecharModalCrachasEntregadores()">&times;</span>
             </div>
             <div class="modal-body">
-                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Selecione os entregadores para gerar os crachás com QR Code para impressão.</p>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Selecione os entregadores para gerar os crachás com QR Code em arquivo PDF.</p>
                 
                 <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 1rem; text-align: left;">
                     <table style="width: 100%; min-width: 100%; border-collapse: collapse;">
@@ -2408,8 +2408,25 @@
                 
                 <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
                     <button type="button" style="background: #64748b; width: auto; padding: 0.55rem 1rem;" onclick="fecharModalCrachasEntregadores()">Cancelar</button>
-                    <button type="button" class="btn-success" style="width: auto; padding: 0.55rem 1rem; background-color: #0284c7;" onclick="executarGeracaoCrachasEntregadoresPDF()">🖨️ Gerar PDF</button>
+                    <button type="button" class="btn-success" style="width: auto; padding: 0.55rem 1rem; background-color: #0284c7;" onclick="executarGeracaoCrachasEntregadoresPDF()">📄 Gerar PDF</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-preview-pdf-crachas" class="modal">
+        <div class="modal-content" style="max-width: 920px;">
+            <div class="window-header">
+                <h3 id="preview-pdf-crachas-titulo">Pré-visualização do PDF (QR Code)</h3>
+                <span class="close-btn" onclick="fecharPreviewPdfCrachas()">&times;</span>
+            </div>
+            <div class="modal-body" style="background: #f1f5f9;">
+                <div id="preview-pdf-crachas-info" style="font-size: 0.85rem; color: #334155; font-weight: 700; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;"></div>
+                <div id="preview-pdf-crachas-pages" style="display: flex; flex-direction: column; gap: 1rem; align-items: center;"></div>
+            </div>
+            <div style="padding: 1rem 1.25rem; background: #ffffff; border-top: 1px solid var(--border); display: flex; gap: 0.75rem; justify-content: flex-end; flex-wrap: wrap;">
+                <button type="button" style="background: #64748b; width: auto; padding: 0.6rem 1.1rem;" onclick="fecharPreviewPdfCrachas()">Fechar</button>
+                <button type="button" class="btn-success" style="width: auto; padding: 0.6rem 1.25rem; background-color: #16a34a;" onclick="confirmarSalvarPdfCrachas()">💾 Salvar / Compartilhar PDF</button>
             </div>
         </div>
     </div>
@@ -9466,189 +9483,348 @@ function doGet(e) {
             document.querySelectorAll('.modal-chk-entreg').forEach(chk => chk.checked = checked);
         }
 
-        function executarGeracaoCrachasEntregadoresPDF() {
+        function gerarPdfCrachasDireto(cards, filename) {
             const qrLib = window.QRCode || (typeof QRCode !== 'undefined' ? QRCode : null);
             if (!qrLib) {
-                alert("A biblioteca de QRCode ainda está carregando. Aguarde e tente novamente.");
-                return;
+                alert("A biblioteca de QRCode não foi encontrada.");
+                return false;
+            }
+            const jsPdfConstructor = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : (typeof jsPDF !== 'undefined' ? jsPDF : null);
+            if (!jsPdfConstructor) {
+                alert("A biblioteca de geração de PDF ainda está carregando. Tente novamente.");
+                return false;
             }
 
+            const tempDiv = document.createElement('div');
+            try {
+                const doc = new jsPdfConstructor({
+                    orientation: 'landscape',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+
+                const pageW = 297;
+                const pageH = 210;
+                const cols = 4;
+                const rows = 2;
+                const perPage = cols * rows;
+                const cardW = 60;
+                const cardH = 80;
+                const gapX = 6;
+                const gapY = 8;
+                const gridW = cols * cardW + (cols - 1) * gapX;
+                const gridH = rows * cardH + (rows - 1) * gapY;
+                const startX = (pageW - gridW) / 2;
+                const startY = (pageH - gridH) / 2 - 2;
+                const totalPages = Math.ceil(cards.length / perPage);
+
+                for (let i = 0; i < cards.length; i++) {
+                    const pageIndex = Math.floor(i / perPage);
+                    const slotIndex = i % perPage;
+
+                    if (slotIndex === 0 && pageIndex > 0) {
+                        doc.addPage('a4', 'landscape');
+                    }
+
+                    const col = slotIndex % cols;
+                    const row = Math.floor(slotIndex / cols);
+                    const x = startX + col * (cardW + gapX);
+                    const y = startY + row * (cardH + gapY);
+                    const c = cards[i];
+                    const [r, g, b] = c.colorRgb || [30, 58, 138];
+
+                    // Fundo branco do crachá
+                    doc.setFillColor(255, 255, 255);
+                    doc.rect(x, y, cardW, cardH, 'F');
+
+                    // Borda tracejada do crachá
+                    doc.setDrawColor(r, g, b);
+                    doc.setLineWidth(0.55);
+                    if (typeof doc.setLineDashPattern === 'function') {
+                        doc.setLineDashPattern([2.2, 1.5], 0);
+                    }
+                    doc.roundedRect(x, y, cardW, cardH, 2, 2, 'S');
+                    if (typeof doc.setLineDashPattern === 'function') {
+                        doc.setLineDashPattern([], 0);
+                    }
+
+                    // Cabeçalho colorido
+                    const innerX = x + 3;
+                    const innerW = cardW - 6;
+                    const headerY = y + 3;
+                    const headerH = 8.5;
+                    doc.setFillColor(r, g, b);
+                    doc.roundedRect(innerX, headerY, innerW, headerH, 1.5, 1.5, 'F');
+
+                    const headerTxt = String(c.headerTxt || '').trim().toUpperCase();
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(255, 255, 255);
+                    let headerFontSize = 10;
+                    doc.setFontSize(headerFontSize);
+                    while (headerFontSize > 6.5 && doc.getTextWidth(headerTxt) > innerW - 3) {
+                        headerFontSize -= 0.5;
+                        doc.setFontSize(headerFontSize);
+                    }
+                    doc.text(headerTxt, x + cardW / 2, headerY + headerH / 2 + 1.1, { align: 'center', maxWidth: innerW - 2 });
+
+                    // Nome centralizado (até 2 linhas)
+                    const nomeTxt = String(c.nomeTxt || '').trim().toUpperCase();
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(15, 23, 42);
+                    let nameFontSize = 9.5;
+                    doc.setFontSize(nameFontSize);
+                    let nameLines = doc.splitTextToSize(nomeTxt, innerW - 2);
+                    if (nameLines.length > 2) {
+                        nameFontSize = 8;
+                        doc.setFontSize(nameFontSize);
+                        nameLines = doc.splitTextToSize(nomeTxt, innerW - 2).slice(0, 2);
+                    }
+                    const nameCenterY = y + 19.5;
+                    if (nameLines.length === 1) {
+                        doc.text(nameLines[0], x + cardW / 2, nameCenterY + 1.0, { align: 'center' });
+                    } else if (nameLines.length >= 2) {
+                        const lineGap = nameFontSize * 0.42;
+                        doc.text(nameLines[0], x + cardW / 2, nameCenterY - lineGap * 0.4, { align: 'center' });
+                        doc.text(nameLines[1], x + cardW / 2, nameCenterY + lineGap * 0.85, { align: 'center' });
+                    }
+
+                    // QR Code vetorial instantâneo (matriz direta em blocos horizontais contínuos)
+                    const qrSize = 38;
+                    const qrX = x + (cardW - qrSize) / 2;
+                    const qrY = y + 27.5;
+
+                    doc.setFillColor(255, 255, 255);
+                    doc.rect(qrX - 1, qrY - 1, qrSize + 2, qrSize + 2, 'F');
+
+                    tempDiv.innerHTML = '';
+                    let qrInstance = null;
+                    try {
+                        qrInstance = new qrLib(tempDiv, {
+                            text: c.qrPayload,
+                            width: 128,
+                            height: 128,
+                            colorDark: "#000000",
+                            colorLight: "#ffffff",
+                            correctLevel: qrLib.CorrectLevel.H
+                        });
+                    } catch (qrErr) {
+                        qrInstance = new qrLib(tempDiv, {
+                            text: c.qrPayload,
+                            width: 128,
+                            height: 128,
+                            colorDark: "#000000",
+                            colorLight: "#ffffff",
+                            correctLevel: qrLib.CorrectLevel.M
+                        });
+                    }
+
+                    const qrModel = qrInstance && qrInstance._oQRCode ? qrInstance._oQRCode : null;
+                    if (qrModel && typeof qrModel.getModuleCount === 'function') {
+                        const moduleCount = qrModel.getModuleCount();
+                        const cell = qrSize / moduleCount;
+                        doc.setFillColor(0, 0, 0);
+                        for (let mr = 0; mr < moduleCount; mr++) {
+                            let mc = 0;
+                            while (mc < moduleCount) {
+                                if (qrModel.isDark(mr, mc)) {
+                                    const startCol = mc;
+                                    while (mc < moduleCount && qrModel.isDark(mr, mc)) {
+                                        mc++;
+                                    }
+                                    const runW = (mc - startCol) * cell;
+                                    doc.rect(qrX + startCol * cell, qrY + mr * cell, runW + 0.03, cell + 0.03, 'F');
+                                } else {
+                                    mc++;
+                                }
+                            }
+                        }
+                    } else {
+                        const canvas = tempDiv.querySelector('canvas');
+                        if (canvas) {
+                            doc.addImage(canvas.toDataURL('image/png'), 'PNG', qrX, qrY, qrSize, qrSize);
+                        }
+                    }
+
+                    // Rodapé do crachá
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(6.5);
+                    doc.setTextColor(100, 116, 139);
+                    doc.text(String(c.footerTxt || '').toUpperCase(), x + cardW / 2, y + cardH - 4, { align: 'center' });
+
+                    // Rodapé discreto da página ao concluir o último slot da página ou último item
+                    if (slotIndex === perPage - 1 || i === cards.length - 1) {
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(7.5);
+                        doc.setTextColor(100, 116, 139);
+                        doc.text(`SICE - Crachás QR Code | Página ${pageIndex + 1} de ${totalPages}`, pageW / 2, pageH - 6, { align: 'center' });
+                    }
+                }
+
+                const pdfDataUri = doc.output('datauristring');
+                window._pendingCrachaPdf = {
+                    doc: doc,
+                    dataUri: pdfDataUri,
+                    filename: filename,
+                    cards: cards,
+                    totalPages: totalPages
+                };
+                abrirPreviewPdfCrachas();
+                return true;
+            } catch (err) {
+                console.error("Erro ao gerar PDF dos crachás:", err);
+                alert("Erro ao gerar o arquivo PDF dos crachás.");
+                return false;
+            } finally {
+                tempDiv.innerHTML = '';
+            }
+        }
+
+        function fecharPreviewPdfCrachas() {
+            const modal = document.getElementById('modal-preview-pdf-crachas');
+            if (modal) modal.style.display = 'none';
+            const pagesEl = document.getElementById('preview-pdf-crachas-pages');
+            if (pagesEl) pagesEl.innerHTML = '';
+            window._pendingCrachaPdf = null;
+        }
+
+        function confirmarSalvarPdfCrachas() {
+            const pending = window._pendingCrachaPdf;
+            if (!pending) return;
+            const { doc, dataUri, filename } = pending;
+            fecharPreviewPdfCrachas();
+            if (typeof AndroidShare !== 'undefined' && typeof AndroidShare.exportPdf === 'function') {
+                AndroidShare.exportPdf(dataUri, filename);
+            } else if (doc) {
+                doc.save(filename);
+            }
+        }
+
+        function abrirPreviewPdfCrachas() {
+            const pending = window._pendingCrachaPdf;
+            if (!pending) return;
+
+            const modal = document.getElementById('modal-preview-pdf-crachas');
+            const tituloEl = document.getElementById('preview-pdf-crachas-titulo');
+            const infoEl = document.getElementById('preview-pdf-crachas-info');
+            const pagesEl = document.getElementById('preview-pdf-crachas-pages');
+            if (!modal || !pagesEl) return;
+
+            const isEntregador = (pending.filename || '').toLowerCase().includes('entregador');
+            if (tituloEl) {
+                tituloEl.textContent = isEntregador
+                    ? 'Pré-visualização do PDF - Crachás Entregadores'
+                    : 'Pré-visualização do PDF - Crachás Porteiros';
+            }
+            if (infoEl) {
+                infoEl.innerHTML = `<span>📄 ${pending.filename}</span><span>${pending.cards.length} crachá(s) • ${pending.totalPages} página(s) (A4 Paisagem)</span>`;
+            }
+
+            pagesEl.innerHTML = '';
+            let renderedNative = false;
+
+            if (typeof AndroidShare !== 'undefined' && typeof AndroidShare.renderPdfPreviewPages === 'function') {
+                try {
+                    const rawJson = AndroidShare.renderPdfPreviewPages(pending.dataUri);
+                    const pageImages = JSON.parse(rawJson || '[]');
+                    if (Array.isArray(pageImages) && pageImages.length > 0) {
+                        renderedNative = true;
+                        pageImages.forEach((imgSrc, idx) => {
+                            const pageBox = document.createElement('div');
+                            pageBox.style.cssText = 'width: 100%; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.6rem; box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08); box-sizing: border-box;';
+                            pageBox.innerHTML = `
+                                <div style="font-size: 0.75rem; font-weight: 800; color: #475569; margin-bottom: 0.4rem; text-align: right;">Página ${idx + 1} de ${pending.totalPages}</div>
+                                <img src="${imgSrc}" alt="Prévia página ${idx + 1}" style="width: 100%; height: auto; display: block; border-radius: 4px; border: 1px solid #e2e8f0; background: #ffffff;">
+                            `;
+                            pagesEl.appendChild(pageBox);
+                        });
+                    }
+                } catch (err) {
+                    console.error("Erro na prévia nativa do PDF:", err);
+                }
+            }
+
+            if (!renderedNative) {
+                const qrLib = window.QRCode || (typeof QRCode !== 'undefined' ? QRCode : null);
+                const perPage = 8;
+                for (let p = 0; p < pending.cards.length; p += perPage) {
+                    const chunk = pending.cards.slice(p, p + perPage);
+                    const pageNum = Math.floor(p / perPage) + 1;
+                    const pageBox = document.createElement('div');
+                    pageBox.style.cssText = 'width: 100%; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.75rem; box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08); box-sizing: border-box;';
+
+                    const headerInfo = document.createElement('div');
+                    headerInfo.style.cssText = 'font-size: 0.75rem; font-weight: 800; color: #475569; margin-bottom: 0.5rem; text-align: right;';
+                    headerInfo.textContent = `Página ${pageNum} de ${pending.totalPages}`;
+                    pageBox.appendChild(headerInfo);
+
+                    const grid = document.createElement('div');
+                    grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 0.65rem;';
+                    pageBox.appendChild(grid);
+
+                    chunk.forEach((c) => {
+                        const [r, g, b] = c.colorRgb || [30, 58, 138];
+                        const colorCss = `rgb(${r}, ${g}, ${b})`;
+                        const cardEl = document.createElement('div');
+                        cardEl.style.cssText = `border: 2px dashed ${colorCss}; border-radius: 6px; padding: 0.5rem; background: #ffffff; display: flex; flex-direction: column; align-items: center; justify-content: space-between; text-align: center; gap: 0.4rem;`;
+                        cardEl.innerHTML = `
+                            <div style="width: 100%; background: ${colorCss}; color: #ffffff; font-weight: 900; font-size: 0.72rem; padding: 0.25rem 0.3rem; border-radius: 4px; text-transform: uppercase;">${c.headerTxt}</div>
+                            <div style="font-size: 0.72rem; font-weight: 800; color: #0f172a; line-height: 1.2; min-height: 1.8rem; display: flex; align-items: center; justify-content: center;">${c.nomeTxt}</div>
+                            <div class="preview-qr-slot" style="width: 110px; height: 110px; display: flex; align-items: center; justify-content: center; background: #ffffff;"></div>
+                            <div style="font-size: 0.58rem; font-weight: 700; color: #64748b; text-transform: uppercase;">${c.footerTxt}</div>
+                        `;
+                        grid.appendChild(cardEl);
+
+                        if (qrLib) {
+                            const slot = cardEl.querySelector('.preview-qr-slot');
+                            try {
+                                new qrLib(slot, {
+                                    text: c.qrPayload,
+                                    width: 104,
+                                    height: 104,
+                                    colorDark: "#000000",
+                                    colorLight: "#ffffff",
+                                    correctLevel: qrLib.CorrectLevel.H
+                                });
+                            } catch (e) {}
+                        }
+                    });
+
+                    pagesEl.appendChild(pageBox);
+                }
+            }
+
+            modal.style.display = 'block';
+        }
+
+        function executarGeracaoCrachasEntregadoresPDF() {
             const checkboxes = document.querySelectorAll('.modal-chk-entreg:checked');
             const selectedIdxs = Array.from(checkboxes).map(chk => parseInt(chk.value));
-            
+
             if (selectedIdxs.length === 0) {
                 alert("Selecione pelo menos um entregador.");
                 return;
             }
 
-            fecharModalCrachasEntregadores();
-
-            // Salvar título original
-            const originalTitle = document.title;
-            document.title = "crachas_entregadores";
-
-            // Criar container de impressão no topo do body
-            let printContainer = document.getElementById('print-crachas-container');
-            if (printContainer) printContainer.remove();
-            
-            printContainer = document.createElement('div');
-            printContainer.id = 'print-crachas-container';
-            document.body.prepend(printContainer);
-
-            // Injetar Estilos de Impressão se não existir
-            let styleEl = document.getElementById('print-crachas-css-final');
-            if (!styleEl) {
-                styleEl = document.createElement('style');
-                styleEl.id = 'print-crachas-css-final';
-                styleEl.innerHTML = `
-                    .print-screen-hidden {
-                        display: none !important;
-                    }
-                    @media print {
-                        body > *:not(#print-crachas-container) { 
-                            display: none !important; 
-                        }
-                        #print-crachas-container, #print-crachas-container * { 
-                            visibility: visible !important; 
-                        }
-                        #print-crachas-container { 
-                            position: absolute !important; 
-                            left: 0 !important; 
-                            top: 0 !important; 
-                            width: 100% !important; 
-                            margin: 0 !important; 
-                            padding: 0 !important; 
-                            background: #ffffff !important;
-                        }
-                        .cracha-print-page { 
-                            page-break-after: always !important; 
-                            break-after: page !important; 
-                            background: #ffffff !important;
-                        }
-                        .cracha-print-page:last-child {
-                            page-break-after: avoid !important;
-                            break-after: avoid !important;
-                        }
-                        .cracha-print-card { 
-                            display: flex !important;
-                            flex-direction: column !important;
-                            align-items: center !important;
-                            justify-content: space-between !important;
-                            text-align: center !important;
-                            background: #ffffff !important;
-                            box-sizing: border-box !important;
-                            page-break-inside: avoid !important;
-                            break-inside: avoid !important;
-                            overflow: hidden !important;
-                        }
-                        .cracha-print-card img,
-                        .cracha-print-card canvas {
-                            display: block !important;
-                            width: 38mm !important;
-                            height: 38mm !important;
-                            max-width: 100% !important;
-                            margin: 0 auto !important;
-                            visibility: visible !important;
-                            opacity: 1 !important;
-                        }
-                    }
-                `;
-                document.head.appendChild(styleEl);
-            }
-
-            printContainer.style.cssText = 'position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; background: #ffffff; z-index: 999999; overflow: auto; padding: 10px; box-sizing: border-box;';
-
-            // Agrupar em páginas de 8 crachás
-            const pageSize = 8;
-            for (let i = 0; i < selectedIdxs.length; i += pageSize) {
-                const chunk = selectedIdxs.slice(i, i + pageSize);
-                
-                const page = document.createElement('div');
-                page.className = 'cracha-print-page';
-                page.style.cssText = 'display: grid; grid-template-columns: repeat(4, 60mm); grid-template-rows: repeat(2, 80mm); gap: 6mm; justify-content: center; align-content: center; margin-bottom: 20px; background: white;';
-                printContainer.appendChild(page);
-
-                chunk.forEach(idx => {
-                    const e = db.entregadores[idx];
-                    if (!e) return;
-                    
-                    const card = document.createElement('div');
-                    card.className = 'cracha-print-card';
-                    card.style.cssText = 'width: 60mm; height: 80mm; border: 2px dashed #0284c7; border-radius: 6px; padding: 3mm; display: flex; flex-direction: column; align-items: center; justify-content: space-between; text-align: center; background: white; box-sizing: border-box; overflow: hidden;';
-                    
-                    const empresaTxt = (e.empresa || 'PORTAL').toUpperCase();
-                    const entregadorNome = (e.nome || 'Entregador').toString().trim().toUpperCase();
-
-                    card.innerHTML = `
-                        <div style="font-size: 13px; font-weight: 900; background: #0284c7; color: #ffffff; width: 100%; padding: 4px 0; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; text-align: center;">${empresaTxt}</div>
-                        <div style="font-size: 11px; font-weight: 800; color: #0f172a; line-height: 1.2; width: 100%; height: 26px; display: flex; align-items: center; justify-content: center; word-break: break-word; overflow: hidden; margin: 2mm 0; text-align: center;">${entregadorNome}</div>
-                        <div id="qr-entreg-dest-${idx}" style="width: 38mm; height: 38mm; display: flex; justify-content: center; align-items: center; background: #ffffff;"></div>
-                        <div style="font-size: 7px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-top: auto; letter-spacing: 0.3px; text-align: center;">SICE - Identificação Entregador</div>
-                    `;
-                    page.appendChild(card);
-
-                    const target = document.getElementById(`qr-entreg-dest-${idx}`);
-                    if (target) {
-                        try {
-                            target.innerHTML = '';
-                            const qrPayload = `COURIER:${e.nome || ''}|${e.empresa || ''}`;
-                            new qrLib(target, {
-                                text: qrPayload,
-                                width: 150,
-                                height: 150,
-                                colorDark: "#000000",
-                                colorLight: "#ffffff",
-                                correctLevel: qrLib.CorrectLevel.H
-                            });
-
-                            const canvas = target.querySelector('canvas');
-                            if (canvas) {
-                                try {
-                                    const dataUrl = canvas.toDataURL('image/png');
-                                    target.innerHTML = `<img src="${dataUrl}" style="width: 38mm; height: 38mm; display: block; margin: 0 auto;" alt="QR Code">`;
-                                } catch (err) {
-                                    canvas.style.display = 'block';
-                                    canvas.style.width = '38mm';
-                                    canvas.style.height = '38mm';
-                                    canvas.style.margin = '0 auto';
-                                }
-                            } else {
-                                const img = target.querySelector('img');
-                                if (img) {
-                                    img.style.display = 'block';
-                                    img.style.width = '38mm';
-                                    img.style.height = '38mm';
-                                    img.style.margin = '0 auto';
-                                }
-                            }
-                        } catch (err) {
-                            console.error("Erro ao gerar QR:", err);
-                        }
-                    }
+            const cards = [];
+            selectedIdxs.forEach(idx => {
+                const e = db.entregadores[idx];
+                if (!e) return;
+                cards.push({
+                    headerTxt: (e.empresa || 'PORTAL').toString().trim().toUpperCase(),
+                    nomeTxt: (e.nome || 'Entregador').toString().trim().toUpperCase(),
+                    qrPayload: `COURIER:${e.nome || ''}|${e.empresa || ''}`,
+                    footerTxt: 'SICE - Identificação Entregador',
+                    colorRgb: [2, 132, 199]
                 });
+            });
+
+            if (cards.length === 0) {
+                alert("Nenhum entregador válido encontrado.");
+                return;
             }
 
-            // Aguardar renderização e decodificação antes de disparar a impressão
-            setTimeout(async () => {
-                const allImgs = Array.from(printContainer.querySelectorAll('img'));
-                await Promise.all(allImgs.map(img => {
-                    if (!img.src) return Promise.resolve();
-                    if (img.complete) return Promise.resolve();
-                    if (img.decode) return img.decode().catch(() => {});
-                    return new Promise(resolve => {
-                        img.onload = resolve;
-                        img.onerror = resolve;
-                        setTimeout(resolve, 300);
-                    });
-                }));
-
-                // Ocultar na tela normal, mas manter no DOM ativo para o spooler de impressão/PDF do Android
-                printContainer.style.cssText = '';
-                printContainer.classList.add('print-screen-hidden');
-
-                appPrint("crachas_entregadores.pdf", true);
-                document.title = originalTitle;
-            }, 600);
+            fecharModalCrachasEntregadores();
+            gerarPdfCrachasDireto(cards, "crachas_entregadores.pdf");
         }
 
         function abrirModalSelecaoCrachas() {
@@ -9686,235 +9862,49 @@ function doGet(e) {
         }
 
         function executarGeracaoCrachasPDF() {
-            const qrLib = window.QRCode || (typeof QRCode !== 'undefined' ? QRCode : null);
-            if (!qrLib) {
-                alert("A biblioteca de QRCode ainda está carregando. Aguarde e tente novamente.");
-                return;
-            }
-
             const checkboxes = document.querySelectorAll('.modal-chk-port:checked');
             const selectedKeys = Array.from(checkboxes).map(chk => chk.value);
-            
+
             if (selectedKeys.length === 0) {
                 alert("Selecione pelo menos a Portaria Central ou um porteiro.");
                 return;
             }
 
-            fecharModalCrachas();
-
-            // Salvar título original
-            const originalTitle = document.title;
-            document.title = "crachas_porteiros";
-
-            // Criar container de impressão no topo do body
-            let printContainer = document.getElementById('print-crachas-container');
-            if (printContainer) printContainer.remove();
-            
-            printContainer = document.createElement('div');
-            printContainer.id = 'print-crachas-container';
-            document.body.prepend(printContainer);
-
-            // Injetar Estilos de Impressão
-            const styleId = 'print-crachas-css-final';
-            let style = document.getElementById(styleId);
-            if (!style) {
-                style = document.createElement('style');
-                style.id = styleId;
-                document.head.appendChild(style);
-            }
-            style.innerHTML = `
-                .print-screen-hidden {
-                    display: none !important;
-                }
-                @media print {
-                    @page { 
-                        size: A4 landscape; 
-                        margin: 6mm; 
-                    }
-                    html, body { 
-                        height: auto !important; 
-                        overflow: visible !important; 
-                        display: block !important;
-                        background: #ffffff !important;
-                        width: 100% !important;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                    }
-                    body > *:not(#print-crachas-container) { 
-                        display: none !important; 
-                    }
-                    #print-crachas-container, #print-crachas-container * { 
-                        visibility: visible !important;
-                        opacity: 1 !important;
-                    }
-                    #print-crachas-container { 
-                        display: block !important; 
-                        position: static !important;
-                        width: 100% !important;
-                        height: auto !important;
-                        opacity: 1 !important;
-                        background: #ffffff !important;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                    }
-                    .cracha-print-page { 
-                        display: grid !important; 
-                        grid-template-columns: repeat(4, 60mm) !important;
-                        grid-template-rows: repeat(2, 80mm) !important;
-                        gap: 6mm !important;
-                        width: 275mm !important;
-                        height: 185mm !important;
-                        justify-content: center !important;
-                        align-content: center !important;
-                        page-break-after: always !important;
-                        break-after: page !important;
-                        box-sizing: border-box !important;
-                        margin: 0 auto !important;
-                        padding: 0 !important;
-                        background: #ffffff !important;
-                    }
-                    .cracha-print-page:last-child {
-                        page-break-after: avoid !important;
-                        break-after: avoid !important;
-                    }
-                    .cracha-print-card { 
-                        width: 60mm !important; 
-                        height: 80mm !important; 
-                        border: 2px dashed #1e3a8a !important;
-                        border-radius: 6px !important;
-                        padding: 3mm !important;
-                        display: flex !important;
-                        flex-direction: column !important;
-                        align-items: center !important;
-                        justify-content: space-between !important;
-                        text-align: center !important;
-                        background: #ffffff !important;
-                        box-sizing: border-box !important;
-                        page-break-inside: avoid !important;
-                        break-inside: avoid !important;
-                        overflow: hidden !important;
-                    }
-                    .cracha-print-card img,
-                    .cracha-print-card canvas {
-                        display: block !important;
-                        width: 38mm !important;
-                        height: 38mm !important;
-                        max-width: 100% !important;
-                        margin: 0 auto !important;
-                        visibility: visible !important;
-                        opacity: 1 !important;
-                    }
-                }
-            `;
-
-            // Exibir temporariamente enquanto gera os QRs para garantir que a renderização do canvas ocorra sem restrições
-            printContainer.style.cssText = 'position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; background: #ffffff; z-index: 999999; overflow: auto; padding: 10px; box-sizing: border-box;';
-
-            // Agrupar em páginas de 8 crachás
-            const pageSize = 8;
-            for (let i = 0; i < selectedKeys.length; i += pageSize) {
-                const chunk = selectedKeys.slice(i, i + pageSize);
-                
-                const page = document.createElement('div');
-                page.className = 'cracha-print-page';
-                page.style.cssText = 'display: grid; grid-template-columns: repeat(4, 60mm); grid-template-rows: repeat(2, 80mm); gap: 6mm; justify-content: center; align-content: center; margin-bottom: 20px; background: white;';
-                printContainer.appendChild(page);
-
-                chunk.forEach(key => {
-                    let blocoTxt = '';
-                    let porteiroNome = '';
-                    let qrPayload = '';
-                    let targetId = `qr-dest-port-${key}`;
-                    let headerBg = '#1e3a8a';
-
-                    if (key === 'central') {
-                        blocoTxt = 'PORTARIA CENTRAL';
-                        porteiroNome = 'ACESSO GERAL (TODOS OS BLOCOS)';
-                        qrPayload = 'PORTER:Portaria Central|CENTRAL';
-                        headerBg = '#047857';
-                    } else {
-                        const idx = parseInt(key);
-                        const p = db.porteiros[idx];
-                        if (!p) return;
-                        const blocoRaw = (p.bloco || '').toString().trim().toUpperCase();
-                        blocoTxt = (blocoRaw.startsWith('BLOCO') || blocoRaw === 'ADM' || blocoRaw === 'PORTARIA') ? blocoRaw : ('BLOCO ' + (blocoRaw || '1'));
-                        porteiroNome = (p.nome || 'Porteiro').toString().trim().toUpperCase();
-                        qrPayload = `PORTER:${p.nome || ''}|${p.bloco || ''}`;
-                    }
-                    
-                    const card = document.createElement('div');
-                    card.className = 'cracha-print-card';
-                    card.style.cssText = `width: 60mm; height: 80mm; border: 2px dashed ${headerBg}; border-radius: 6px; padding: 3mm; display: flex; flex-direction: column; align-items: center; justify-content: space-between; text-align: center; background: white; box-sizing: border-box; overflow: hidden;`;
-                    
-                    card.innerHTML = `
-                        <div style="font-size: 13px; font-weight: 900; background: ${headerBg}; color: #ffffff; width: 100%; padding: 4px 0; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; text-align: center;">${blocoTxt}</div>
-                        <div style="font-size: 11px; font-weight: 800; color: #0f172a; line-height: 1.2; width: 100%; height: 26px; display: flex; align-items: center; justify-content: center; word-break: break-word; overflow: hidden; margin: 2mm 0; text-align: center;">${porteiroNome}</div>
-                        <div id="${targetId}" style="width: 38mm; height: 38mm; display: flex; justify-content: center; align-items: center; background: #ffffff;"></div>
-                        <div style="font-size: 7px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-top: auto; letter-spacing: 0.3px; text-align: center;">SICE - Baixa na Entrega</div>
-                    `;
-                    page.appendChild(card);
-
-                    const target = document.getElementById(targetId);
-                    if (target) {
-                        try {
-                            target.innerHTML = '';
-                            new qrLib(target, {
-                                text: qrPayload,
-                                width: 150,
-                                height: 150,
-                                colorDark: "#000000",
-                                colorLight: "#ffffff",
-                                correctLevel: qrLib.CorrectLevel.H
-                            });
-
-                            const canvas = target.querySelector('canvas');
-                            if (canvas) {
-                                try {
-                                    const dataUrl = canvas.toDataURL('image/png');
-                                    target.innerHTML = `<img src="${dataUrl}" style="width: 38mm; height: 38mm; display: block; margin: 0 auto;" alt="QR Code">`;
-                                } catch (e) {
-                                    canvas.style.display = 'block';
-                                    canvas.style.width = '38mm';
-                                    canvas.style.height = '38mm';
-                                    canvas.style.margin = '0 auto';
-                                }
-                            } else {
-                                const img = target.querySelector('img');
-                                if (img) {
-                                    img.style.display = 'block';
-                                    img.style.width = '38mm';
-                                    img.style.height = '38mm';
-                                    img.style.margin = '0 auto';
-                                }
-                            }
-                        } catch (e) {
-                            console.error("Erro ao gerar QR:", e);
-                        }
-                    }
-                });
-            }
-
-            // Aguardar renderização e decodificação antes de disparar a impressão
-            setTimeout(async () => {
-                const allImgs = Array.from(printContainer.querySelectorAll('img'));
-                await Promise.all(allImgs.map(img => {
-                    if (!img.src) return Promise.resolve();
-                    if (img.complete) return Promise.resolve();
-                    if (img.decode) return img.decode().catch(() => {});
-                    return new Promise(resolve => {
-                        img.onload = resolve;
-                        img.onerror = resolve;
-                        setTimeout(resolve, 300);
+            const cards = [];
+            selectedKeys.forEach(key => {
+                if (key === 'central') {
+                    cards.push({
+                        headerTxt: 'PORTARIA CENTRAL',
+                        nomeTxt: 'ACESSO GERAL (TODOS OS BLOCOS)',
+                        qrPayload: 'PORTER:Portaria Central|CENTRAL',
+                        footerTxt: 'SICE - Baixa na Entrega',
+                        colorRgb: [4, 120, 87]
                     });
-                }));
+                } else {
+                    const idx = parseInt(key);
+                    const p = db.porteiros[idx];
+                    if (!p) return;
+                    const blocoRaw = (p.bloco || '').toString().trim().toUpperCase();
+                    const blocoTxt = (blocoRaw.startsWith('BLOCO') || blocoRaw === 'ADM' || blocoRaw === 'PORTARIA')
+                        ? blocoRaw
+                        : ('BLOCO ' + (blocoRaw || '1'));
+                    cards.push({
+                        headerTxt: blocoTxt,
+                        nomeTxt: (p.nome || 'Porteiro').toString().trim().toUpperCase(),
+                        qrPayload: `PORTER:${p.nome || ''}|${p.bloco || ''}`,
+                        footerTxt: 'SICE - Baixa na Entrega',
+                        colorRgb: [30, 58, 138]
+                    });
+                }
+            });
 
-                // Ocultar na tela normal, mas manter no DOM ativo para o spooler de impressão/PDF do Android
-                printContainer.style.cssText = '';
-                printContainer.classList.add('print-screen-hidden');
+            if (cards.length === 0) {
+                alert("Nenhum porteiro válido selecionado.");
+                return;
+            }
 
-                appPrint("crachas_porteiros.pdf", true);
-                document.title = originalTitle;
-            }, 600);
+            fecharModalCrachas();
+            gerarPdfCrachasDireto(cards, "crachas_porteiros.pdf");
         }
         function toggleSelectAllMoradores() {
             const chkAll = document.getElementById('chk-all-moradores').checked;

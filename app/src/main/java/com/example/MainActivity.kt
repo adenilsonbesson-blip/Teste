@@ -656,6 +656,55 @@ class AndroidShareInterface(private val context: Context) {
     }
 
     @JavascriptInterface
+    fun renderPdfPreviewPages(content: String): String {
+        val tempFile = File(context.cacheDir, "preview_${System.currentTimeMillis()}.pdf")
+        var pfd: android.os.ParcelFileDescriptor? = null
+        var renderer: android.graphics.pdf.PdfRenderer? = null
+        return try {
+            val cleanContent = if (content.contains(";base64,")) content.substringAfter("base64,") else content
+            val bytes = android.util.Base64.decode(cleanContent, android.util.Base64.DEFAULT)
+            FileOutputStream(tempFile).use { it.write(bytes) }
+
+            pfd = android.os.ParcelFileDescriptor.open(tempFile, android.os.ParcelFileDescriptor.MODE_READ_ONLY)
+            renderer = android.graphics.pdf.PdfRenderer(pfd)
+
+            val pagesJson = org.json.JSONArray()
+            val maxPages = minOf(renderer.pageCount, 30)
+            for (i in 0 until maxPages) {
+                val page = renderer.openPage(i)
+                try {
+                    val targetWidth = 1120
+                    val targetHeight = maxOf(1, (targetWidth.toFloat() * page.height / maxOf(1, page.width)).toInt())
+                    val bitmap = android.graphics.Bitmap.createBitmap(
+                        targetWidth,
+                        targetHeight,
+                        android.graphics.Bitmap.Config.ARGB_8888
+                    )
+                    try {
+                        bitmap.eraseColor(android.graphics.Color.WHITE)
+                        page.render(bitmap, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        val out = java.io.ByteArrayOutputStream()
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                        val b64 = android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+                        pagesJson.put("data:image/png;base64,$b64")
+                    } finally {
+                        bitmap.recycle()
+                    }
+                } finally {
+                    page.close()
+                }
+            }
+            pagesJson.toString()
+        } catch (e: Exception) {
+            "[]"
+        } finally {
+            try { renderer?.close() } catch (_: Exception) {}
+            try { pfd?.close() } catch (_: Exception) {}
+            try { if (tempFile.exists()) tempFile.delete() } catch (_: Exception) {}
+        }
+    }
+
+    @JavascriptInterface
     fun exportPdf(content: String, filename: String = "Relatorio_entregas.pdf") {
         val activity = findActivity(context)
         activity?.runOnUiThread {
@@ -711,21 +760,26 @@ class AndroidShareInterface(private val context: Context) {
                     cacheFile
                 )
 
+                val isCracha = actualFileName.contains("cracha", ignoreCase = true)
+                val subjectText = if (isCracha) "Crachás QR Code ($actualFileName)" else "Relatório de Entregas"
+                val chooserTitle = if (isCracha) "Salvar / Compartilhar Crachás em PDF" else "Salvar / Compartilhar Relatório em PDF"
+
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
                     type = "application/pdf"
-                    putExtra(Intent.EXTRA_SUBJECT, "Relatório de Entregas")
+                    putExtra(Intent.EXTRA_SUBJECT, subjectText)
                     putExtra(Intent.EXTRA_STREAM, uri)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
 
-                val chooser = Intent.createChooser(shareIntent, "Salvar / Compartilhar Relatório em PDF")
+                val chooser = Intent.createChooser(shareIntent, chooserTitle)
                 chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(chooser)
 
-                val toastMsg = if (salvoEmDownloads) {
-                    "PDF com todos os registros gerado e salvo em Downloads!"
-                } else {
-                    "PDF com todos os registros gerado com sucesso!"
+                val toastMsg = when {
+                    isCracha && salvoEmDownloads -> "PDF de crachás gerado e salvo em Downloads ($actualFileName)!"
+                    isCracha -> "PDF de crachás gerado com sucesso!"
+                    salvoEmDownloads -> "PDF com todos os registros gerado e salvo em Downloads!"
+                    else -> "PDF com todos os registros gerado com sucesso!"
                 }
                 Toast.makeText(context, toastMsg, Toast.LENGTH_LONG).show()
             } catch (e: Exception) {

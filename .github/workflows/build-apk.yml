@@ -11,6 +11,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build APK
@@ -83,6 +86,33 @@ jobs:
           ls -la app/build/outputs/apk/debug/ || true
           ls -la app/build/outputs/apk/release/ || true
 
+      - name: Prepare Direct release.apk and version.json
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          RELEASE_APK=$(find app/build/outputs/apk/release -maxdepth 2 -name "*.apk" | head -n 1)
+          if [ -z "$RELEASE_APK" ] || [ ! -f "$RELEASE_APK" ]; then
+            echo "Erro: APK release não encontrado!"
+            exit 1
+          fi
+          cp -f "$RELEASE_APK" release.apk
+          SHA256=$(sha256sum release.apk | awk '{print $1}')
+          VERSION_CODE=$(grep -E 'versionCode\s*=' app/build.gradle.kts | head -n 1 | grep -oE '[0-9]+' || echo "1")
+          VERSION_NAME=$(grep -E 'versionName\s*=' app/build.gradle.kts | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/' || echo "1.0")
+          BUILT_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat <<EOF > version.json
+          {
+            "versionCode": ${VERSION_CODE},
+            "versionName": "${VERSION_NAME}",
+            "apkFile": "release.apk",
+            "sha256": "${SHA256}",
+            "buildRunNumber": ${GITHUB_RUN_NUMBER},
+            "builtAtUtc": "${BUILT_AT}"
+          }
+          EOF
+          echo "Preparado release.apk (versionCode=${VERSION_CODE}, versionName=${VERSION_NAME}, sha256=${SHA256})"
+          cat version.json
+
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
@@ -96,3 +126,44 @@ jobs:
           name: app-release-apk
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+      - name: Upload Direct release.apk Artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk-direct
+          path: release.apk
+          if-no-files-found: error
+
+      - name: Publish release.apk to GitHub Releases (Direct Download)
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          RELEASE_TITLE="Condo Entregas - Build #${GITHUB_RUN_NUMBER}"
+          RELEASE_NOTES="APK gerado automaticamente pelo GitHub Actions (commit ${GITHUB_SHA::7}). Link direto para download automático: release.apk"
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest release.apk version.json --clobber
+            gh release edit latest --title "$RELEASE_TITLE" --notes "$RELEASE_NOTES" --latest
+          else
+            gh release create latest release.apk version.json \
+              --title "$RELEASE_TITLE" \
+              --notes "$RELEASE_NOTES" \
+              --target "$GITHUB_SHA" \
+              --latest
+          fi
+
+      - name: Add Direct APK Download Link to Summary
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          DIRECT_URL="https://github.com/${{ github.repository }}/releases/latest/download/release.apk"
+          {
+            echo "## 📦 Download Direto do APK (release.apk)"
+            echo ""
+            echo "O arquivo **\`release.apk\`** foi gerado e publicado diretamente na Release \`latest\` (sem precisar descompactar ZIP):"
+            echo ""
+            echo "- 🔗 **Link Direto:** [${DIRECT_URL}](${DIRECT_URL})"
+            echo "- 📱 **Atualização Automática no App:** Configure \`${{ github.repository }}\` em **Admin > Backup & Sistema** no aplicativo para baixar \`release.apk\` automaticamente sempre que uma nova build for gerada no GitHub."
+          } >> "$GITHUB_STEP_SUMMARY"
