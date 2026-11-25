@@ -9598,24 +9598,30 @@ function doGet(e) {
 
                     tempDiv.innerHTML = '';
                     let qrInstance = null;
+                    const tryMakeQr = (payload, level) => {
+                        tempDiv.innerHTML = '';
+                        return new qrLib(tempDiv, {
+                            text: String(payload || ''),
+                            width: 128,
+                            height: 128,
+                            colorDark: "#000000",
+                            colorLight: "#ffffff",
+                            correctLevel: level
+                        });
+                    };
                     try {
-                        qrInstance = new qrLib(tempDiv, {
-                            text: c.qrPayload,
-                            width: 128,
-                            height: 128,
-                            colorDark: "#000000",
-                            colorLight: "#ffffff",
-                            correctLevel: qrLib.CorrectLevel.H
-                        });
-                    } catch (qrErr) {
-                        qrInstance = new qrLib(tempDiv, {
-                            text: c.qrPayload,
-                            width: 128,
-                            height: 128,
-                            colorDark: "#000000",
-                            colorLight: "#ffffff",
-                            correctLevel: qrLib.CorrectLevel.M
-                        });
+                        qrInstance = tryMakeQr(c.qrPayload, qrLib.CorrectLevel.H);
+                    } catch (qrErr1) {
+                        try {
+                            qrInstance = tryMakeQr(c.qrPayload, qrLib.CorrectLevel.M);
+                        } catch (qrErr2) {
+                            try {
+                                qrInstance = tryMakeQr(c.qrPayload, qrLib.CorrectLevel.L);
+                            } catch (qrErr3) {
+                                const safePayload = String(c.qrPayload || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                                qrInstance = tryMakeQr(safePayload, qrLib.CorrectLevel.L);
+                            }
+                        }
                     }
 
                     const qrModel = qrInstance && qrInstance._oQRCode ? qrInstance._oQRCode : null;
