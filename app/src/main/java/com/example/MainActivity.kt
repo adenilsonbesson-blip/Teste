@@ -189,11 +189,22 @@ class MainActivity : ComponentActivity() {
 @Suppress("DEPRECATION")
 @Composable
 fun SiceWebViewContainer() {
+    val composeContext = LocalContext.current
     var showNativeStartup by remember { mutableStateOf(true) }
-    
+    var availableDriveApk by remember { mutableStateOf<DriveApkInfo?>(null) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(350)
         showNativeStartup = false
+    }
+
+    LaunchedEffect(Unit) {
+        val update = AppUpdateChecker.checkForAvailableUpdate(composeContext.applicationContext)
+        if (update != null) {
+            availableDriveApk = update
+            showUpdateDialog = true
+        }
     }
 
     var fileChooserCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
@@ -515,7 +526,7 @@ fun SiceWebViewContainer() {
                         addJavascriptInterface(AndroidShareInterface(context), "AndroidShare")
                         addJavascriptInterface(AndroidPrintInterface(context, this), "AndroidPrint")
                         addJavascriptInterface(CameraPermissionInterface(activity), "CameraPermissionLauncher")
-                        addJavascriptInterface(AndroidDBInterface(context), "AndroidDB")
+                        addJavascriptInterface(AndroidDBInterface(context, this), "AndroidDB")
                         addJavascriptInterface(AndroidScannerInterface(activity) { target ->
                             scanTarget = target
                             isScanning = true
@@ -572,6 +583,75 @@ fun SiceWebViewContainer() {
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop
                 )
             }
+        }
+
+        if (!showNativeStartup && showUpdateDialog && availableDriveApk != null) {
+            val apkInfo = availableDriveApk!!
+            AlertDialog(
+                onDismissRequest = { showUpdateDialog = false },
+                title = {
+                    Text(
+                        text = "Atualização Disponível",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Existe uma atualização disponível.",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Arquivo: ${apkInfo.fileName}",
+                            fontSize = 13.sp,
+                            color = Color(0xFF475569)
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            AppUpdateChecker.markUpdateStarted(composeContext, apkInfo)
+                            showUpdateDialog = false
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(apkInfo.downloadUrl)).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                composeContext.startActivity(intent)
+                            } catch (e: Exception) {
+                                try {
+                                    val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse(AppUpdateChecker.UPDATE_FOLDER_URL)).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    composeContext.startActivity(fallbackIntent)
+                                } catch (ignored: Exception) {
+                                    Toast.makeText(composeContext, "Não foi possível abrir o link da atualização.", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Baixar Atualização")
+                    }
+                },
+                dismissButton = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(
+                            onClick = {
+                                AppUpdateChecker.markUpdateCompleted(composeContext, apkInfo.updateKey)
+                                showUpdateDialog = false
+                            }
+                        ) {
+                            Text("Já atualizei")
+                        }
+                        TextButton(
+                            onClick = { showUpdateDialog = false }
+                        ) {
+                            Text("Depois")
+                        }
+                    }
+                }
+            )
         }
     }
 }
@@ -1030,7 +1110,8 @@ class CameraPermissionInterface(private val activity: Activity) {
 }
 
 class AndroidDBInterface(
-    private val context: Context
+    private val context: Context,
+    private val webView: WebView? = null
 ) {
     companion object {
         @Volatile
@@ -1680,8 +1761,39 @@ class AndroidDBInterface(
         }
     }
 
-    fun mergeIncomingSQLiteBytes(dbBytes: ByteArray): String {
+    private fun notifyImportProgress(percent: Int, stage: String) {
+        val wv = webView ?: return
+        val clamped = percent.coerceIn(0, 100)
+        val safeStage = org.json.JSONObject.quote(stage)
+        wv.post {
+            try {
+                wv.evaluateJavascript(
+                    "if (typeof onBackupImportProgress === 'function') { onBackupImportProgress($clamped, $safeStage); }",
+                    null
+                )
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun notifyImportFinished(resultJson: String) {
+        val wv = webView ?: return
+        val quoted = org.json.JSONObject.quote(resultJson)
+        wv.post {
+            try {
+                wv.evaluateJavascript(
+                    "if (typeof onBackupImportFinished === 'function') { onBackupImportFinished($quoted); }",
+                    null
+                )
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun mergeIncomingSQLiteBytes(
+        dbBytes: ByteArray,
+        onProgress: ((Int, String) -> Unit)? = null
+    ): String {
         return try {
+            onProgress?.invoke(15, "Abrindo banco SQLite do backup...")
             val tempFile = File(context.cacheDir, "temp_import_${System.currentTimeMillis()}.db")
             FileOutputStream(tempFile).use { fos ->
                 fos.write(dbBytes)
@@ -1691,10 +1803,11 @@ class AndroidDBInterface(
                 null,
                 android.database.sqlite.SQLiteDatabase.OPEN_READONLY
             )
-            
+
+            onProgress?.invoke(28, "Extraindo tabelas e registros do backup...")
             // Extract exact data from incoming relational tables
             val incomingObj = extractJsonFromSQLite(incomingDb)
-            
+
             try {
                 // Check all rows in web_data (support all legacy keys: sice_db_v16, sice_db_v15, SICE_LOCAL_DB_V16, etc.)
                 val cursor = incomingDb.rawQuery("SELECT jsonValue, keyName FROM web_data ORDER BY (CASE WHEN keyName = 'sice_db_v16' THEN 0 ELSE 1 END), length(jsonValue) DESC", null)
@@ -1721,7 +1834,8 @@ class AndroidDBInterface(
             incomingDb.close()
             tempFile.delete()
 
-            processAndApplyIncomingData(incomingObj)
+            onProgress?.invoke(38, "Preparando mesclagem dos dados...")
+            processAndApplyIncomingData(incomingObj, onProgress)
         } catch (e: Exception) {
             e.printStackTrace()
             val res = org.json.JSONObject()
@@ -1731,11 +1845,16 @@ class AndroidDBInterface(
         }
     }
 
-    fun mergeIncomingJson(incomingJsonStr: String): String {
+    fun mergeIncomingJson(
+        incomingJsonStr: String,
+        onProgress: ((Int, String) -> Unit)? = null
+    ): String {
         return try {
+            onProgress?.invoke(25, "Lendo estrutura JSON do backup...")
             val cleanJson = sanitizeDataJson(incomingJsonStr)
             val incomingObj = org.json.JSONObject(cleanJson)
-            processAndApplyIncomingData(incomingObj)
+            onProgress?.invoke(38, "Preparando mesclagem dos dados...")
+            processAndApplyIncomingData(incomingObj, onProgress)
         } catch (e: Exception) {
             e.printStackTrace()
             val res = org.json.JSONObject()
@@ -1745,7 +1864,11 @@ class AndroidDBInterface(
         }
     }
 
-    private fun processAndApplyIncomingData(incomingObj: org.json.JSONObject): String {
+    private fun processAndApplyIncomingData(
+        incomingObj: org.json.JSONObject,
+        onProgress: ((Int, String) -> Unit)? = null
+    ): String {
+        onProgress?.invoke(42, "Carregando dados atuais do sistema...")
         // Get current local database JSON state
         val currentLoaded = load()
         val currentJsonStr = if (currentLoaded.isNotBlank() && currentLoaded.length > 20) {
@@ -1769,10 +1892,11 @@ class AndroidDBInterface(
         }
 
         // Non-destructively merge incoming backup into current database state
-        val mergedWrapper = mergeJsonNonDestructive(currentObj, incomingObj)
+        val mergedWrapper = mergeJsonNonDestructive(currentObj, incomingObj, onProgress)
         val mergedData = if (mergedWrapper.has("data")) mergedWrapper.getJSONObject("data") else mergedWrapper
         val reportObj = if (mergedWrapper.has("report")) mergedWrapper.getJSONObject("report") else org.json.JSONObject()
 
+        onProgress?.invoke(75, "Gravando dados consolidados...")
         val jsonString = mergedData.toString()
 
         // 1. Clear / Sync in-memory cache instantly with clean data object
@@ -1781,6 +1905,7 @@ class AndroidDBInterface(
         // 2. Save directly to disk and web_data
         save(jsonString)
 
+        onProgress?.invoke(84, "Sincronizando tabelas locais SQLite...")
         // 3. Update local Room SQLite database with merged records immediately
         runBlocking(Dispatchers.IO) {
             val moradoresList = mutableListOf<com.example.data.Morador>()
@@ -1870,6 +1995,7 @@ class AndroidDBInterface(
                 }
             }
 
+            onProgress?.invoke(96, "Finalizando sincronização...")
             try {
                 val siceDb = app.database
                 siceDb.openHelper.writableDatabase.execSQL("PRAGMA wal_checkpoint(FULL)")
@@ -1878,6 +2004,7 @@ class AndroidDBInterface(
             }
         }
 
+        onProgress?.invoke(100, "Importação concluída!")
         val res = org.json.JSONObject()
         res.put("success", true)
         res.put("report", reportObj)
@@ -2123,7 +2250,12 @@ class AndroidDBInterface(
         return jObj
     }
 
-    private fun mergeJsonNonDestructive(current: org.json.JSONObject, incoming: org.json.JSONObject): org.json.JSONObject {
+    private fun mergeJsonNonDestructive(
+        current: org.json.JSONObject,
+        incoming: org.json.JSONObject,
+        onProgress: ((Int, String) -> Unit)? = null
+    ): org.json.JSONObject {
+        onProgress?.invoke(45, "Mesclando moradores, porteiros e entregadores...")
         val result = org.json.JSONObject(current.toString())
 
         var addMor = 0; var skipMor = 0; var totalMor = 0
@@ -2299,8 +2431,15 @@ class AndroidDBInterface(
 
         if (incoming.has("encomendas")) {
             val inEncomendas = incoming.getJSONArray("encomendas")
-            for (i in 0 until inEncomendas.length()) {
+            val totalInEnc = inEncomendas.length()
+            val progressStep = maxOf(1, totalInEnc / 20)
+            onProgress?.invoke(50, "Analisando $totalInEnc encomenda(s)...")
+            for (i in 0 until totalInEnc) {
                 totalEnc++
+                if (totalInEnc > 0 && (i % progressStep == 0 || i == totalInEnc - 1)) {
+                    val pct = 50 + ((i + 1) * 20 / totalInEnc)
+                    onProgress?.invoke(pct, "Mesclando encomendas (${i + 1} de $totalInEnc)...")
+                }
                 val enc = inEncomendas.getJSONObject(i)
                 val inRastreio = enc.optString("rastreio", "").trim().uppercase()
                 val inBloco = enc.optString("bloco", "").trim().uppercase()
@@ -2462,6 +2601,24 @@ class AndroidDBInterface(
 
     @JavascriptInterface
     fun importOriginalDatabase(base64DataUrl: String): String {
+        return importOriginalDatabaseInternal(base64DataUrl, null)
+    }
+
+    @JavascriptInterface
+    fun importOriginalDatabaseAsync(base64DataUrl: String) {
+        CoroutineScope(Dispatchers.IO).launch {
+            notifyImportProgress(8, "Decodificando arquivo de backup...")
+            val resultJson = importOriginalDatabaseInternal(base64DataUrl) { pct, stage ->
+                notifyImportProgress(pct, stage)
+            }
+            notifyImportFinished(resultJson)
+        }
+    }
+
+    private fun importOriginalDatabaseInternal(
+        base64DataUrl: String,
+        onProgress: ((Int, String) -> Unit)? = null
+    ): String {
         return try {
             val pureBase64 = if (base64DataUrl.contains("base64,")) {
                 base64DataUrl.substringAfter("base64,")
@@ -2469,16 +2626,17 @@ class AndroidDBInterface(
                 base64DataUrl
             }
             val dbBytes = android.util.Base64.decode(pureBase64, android.util.Base64.DEFAULT)
-            
+            onProgress?.invoke(12, "Validando formato do arquivo...")
+
             val sqliteSignature = "SQLite format 3\u0000".toByteArray(StandardCharsets.US_ASCII)
             val isSqlite = dbBytes.size >= 16 && dbBytes.take(16).toByteArray().contentEquals(sqliteSignature)
-            
+
             if (isSqlite) {
-                mergeIncomingSQLiteBytes(dbBytes)
+                mergeIncomingSQLiteBytes(dbBytes, onProgress)
             } else {
                 val utf8Str = String(dbBytes, StandardCharsets.UTF_8).trim()
                 if (utf8Str.startsWith("{") && utf8Str.endsWith("}")) {
-                    mergeIncomingJson(utf8Str)
+                    mergeIncomingJson(utf8Str, onProgress)
                 } else {
                     "{\"success\":false,\"error\":\"Formato de arquivo incompatível. Esperado SQLite (.db) ou JSON.\"}"
                 }
@@ -2557,21 +2715,40 @@ class AndroidDBInterface(
 
     @JavascriptInterface
     fun importOriginalDatabaseFromFilePath(filePath: String): String {
+        return importOriginalDatabaseFromFilePathInternal(filePath, null)
+    }
+
+    @JavascriptInterface
+    fun importOriginalDatabaseFromFilePathAsync(filePath: String) {
+        CoroutineScope(Dispatchers.IO).launch {
+            notifyImportProgress(6, "Lendo arquivo selecionado...")
+            val resultJson = importOriginalDatabaseFromFilePathInternal(filePath) { pct, stage ->
+                notifyImportProgress(pct, stage)
+            }
+            notifyImportFinished(resultJson)
+        }
+    }
+
+    private fun importOriginalDatabaseFromFilePathInternal(
+        filePath: String,
+        onProgress: ((Int, String) -> Unit)? = null
+    ): String {
         return try {
             val file = File(filePath)
             if (!file.exists() || !file.canRead()) {
                 return "{\"success\":false,\"error\":\"Arquivo de banco não encontrado ou inacessível\"}"
             }
             val dbBytes = file.readBytes()
+            onProgress?.invoke(12, "Validando formato do arquivo...")
             val sqliteSignature = "SQLite format 3\u0000".toByteArray(StandardCharsets.US_ASCII)
             val isSqlite = dbBytes.size >= 16 && dbBytes.take(16).toByteArray().contentEquals(sqliteSignature)
-            
+
             if (isSqlite) {
-                mergeIncomingSQLiteBytes(dbBytes)
+                mergeIncomingSQLiteBytes(dbBytes, onProgress)
             } else {
                 val utf8Str = String(dbBytes, StandardCharsets.UTF_8).trim()
                 if (utf8Str.startsWith("{") && utf8Str.endsWith("}")) {
-                    mergeIncomingJson(utf8Str)
+                    mergeIncomingJson(utf8Str, onProgress)
                 } else {
                     "{\"success\":false,\"error\":\"Formato de arquivo incompatível. Esperado SQLite (.db) ou JSON.\"}"
                 }

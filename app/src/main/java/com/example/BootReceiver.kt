@@ -9,6 +9,13 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED || 
             intent.action == "android.intent.action.QUICKBOOT_POWERON" || 
             intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+                try {
+                    AppUpdateChecker.onPackageReplaced(context)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
             try {
                 DriveBackupWorker.scheduleOrCancel(context)
             } catch (e: Exception) {
