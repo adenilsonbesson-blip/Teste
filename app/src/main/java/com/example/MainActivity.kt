@@ -548,11 +548,22 @@ fun SiceWebViewContainer() {
                 onBarcodeScanned = { barcode ->
                     isScanning = false
                     webViewInstance?.post {
-                        val cleanBarcode = barcode.replace("\'", "\\'")
+                        val jsBarcode = org.json.JSONObject.quote(barcode)
                         if (scanTarget == "entrada") {
-                            webViewInstance?.loadUrl("javascript:(function() { document.getElementById('barcode-input').value = '$cleanBarcode'; processBarcode('$cleanBarcode'); })()")
+                            webViewInstance?.evaluateJavascript(
+                                "if (document.getElementById('barcode-input')) { document.getElementById('barcode-input').value = $jsBarcode; } processBarcode($jsBarcode);",
+                                null
+                            )
+                        } else if (scanTarget.startsWith("relatorio")) {
+                            webViewInstance?.evaluateJavascript(
+                                "if (typeof processarValidacaoQRRelatorio === 'function') { processarValidacaoQRRelatorio($jsBarcode); }",
+                                null
+                            )
                         } else {
-                            webViewInstance?.loadUrl("javascript:(function() { document.getElementById('barcode-baixa-input').value = '$cleanBarcode'; processarValidacaoQR('$cleanBarcode'); })()")
+                            webViewInstance?.evaluateJavascript(
+                                "if (document.getElementById('barcode-baixa-input')) { document.getElementById('barcode-baixa-input').value = $jsBarcode; } processarValidacaoQR($jsBarcode);",
+                                null
+                            )
                         }
                     }
                 },
@@ -560,9 +571,14 @@ fun SiceWebViewContainer() {
                     isScanning = false
                     webViewInstance?.post {
                         if (scanTarget == "entrada") {
-                            webViewInstance?.loadUrl("javascript:desativarCamera()")
+                            webViewInstance?.evaluateJavascript("desativarCamera();", null)
+                        } else if (scanTarget.startsWith("relatorio")) {
+                            webViewInstance?.evaluateJavascript(
+                                "if (typeof fecharModalValidacaoQRRelatorio === 'function') { fecharModalValidacaoQRRelatorio(); }",
+                                null
+                            )
                         } else {
-                            webViewInstance?.loadUrl("javascript:fecharModalValidacaoQR()")
+                            webViewInstance?.evaluateJavascript("fecharModalValidacaoQR();", null)
                         }
                     }
                 }
@@ -3484,6 +3500,41 @@ fun NativeScannerView(
                     Text(
                         text = descText,
                         color = cardTextColor.copy(alpha = 0.9f),
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            } else if (scanTarget.startsWith("relatorio")) {
+                val isEditAction = scanTarget.endsWith("EDIT")
+                val titleText = if (isEditAction) "🏢 AUTORIZAR EDIÇÃO DE REGISTRO" else "🏢 AUTORIZAR EXCLUSÃO DE REGISTRO"
+                val descText = if (isEditAction)
+                    "Escaneie o QR Code da PORTARIA CENTRAL para liberar a edição do registro."
+                else
+                    "Escaneie o QR Code da PORTARIA CENTRAL para liberar a exclusão do registro."
+
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 72.dp)
+                        .padding(horizontal = 24.dp)
+                        .fillMaxWidth()
+                        .background(Color(0xFFD1FAE5), shape = RoundedCornerShape(12.dp))
+                        .border(2.dp, Color(0xFF10B981), shape = RoundedCornerShape(12.dp))
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = titleText,
+                        color = Color(0xFF065F46),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = descText,
+                        color = Color(0xFF065F46).copy(alpha = 0.9f),
                         fontSize = 13.sp,
                         textAlign = TextAlign.Center,
                         fontWeight = FontWeight.Medium

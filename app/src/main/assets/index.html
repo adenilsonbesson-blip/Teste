@@ -2299,6 +2299,36 @@
         </div>
     </div>
 
+    <div id="modal-qrcode-relatorio" class="modal" style="z-index: 99990;">
+        <div class="modal-content" style="max-width: 440px;">
+            <div class="window-header">
+                <h3>Autorização - Portaria Central</h3>
+                <span class="close-btn" onclick="fecharModalValidacaoQRRelatorio()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="relatorio-qr-alerta" style="background-color: #d1fae5; border: 2px solid #10b981; border-radius: 12px; padding: 12px; margin-bottom: 14px; text-align: center; color: #065f46;">
+                    <div style="font-weight: bold; font-size: 0.95rem; margin-bottom: 4px;">🏢 QR CODE PORTARIA CENTRAL</div>
+                    <div style="font-size: 0.84rem;">Escaneie o QR Code da Portaria Central (cadastrado nos crachás) para continuar.</div>
+                </div>
+
+                <div id="relatorio-qr-erro" style="display: none; background-color: #fee2e2; border: 1.5px solid #ef4444; border-radius: 10px; padding: 10px; margin-bottom: 14px; text-align: center; color: #991b1b; font-size: 0.84rem; font-weight: 700;">
+                </div>
+
+                <div class="scanner-container" style="border-color: var(--success); margin-bottom: 1rem;">
+                    <div class="camera-wrapper">
+                        <div id="camera-preview-relatorio"></div>
+                        <div class="scanner-laser" id="laser-relatorio"></div>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 0.55rem;">
+                    <button type="button" class="btn-success" style="width: 100%; font-weight: 800;" onclick="ativarCameraRelatorioQR()">📷 Escanear QR Code Portaria Central</button>
+                    <button type="button" style="background: #64748b; width: 100%;" onclick="fecharModalValidacaoQRRelatorio()">Cancelar Operação</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL UNIVERSAL DE FEEDBACK FORMATADO EM CARDS COLORIDOS (VERDE, AMARELO, VERMELHO) -->
     <div id="modal-card-sucesso" class="modal" style="display:none; z-index: 999999; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px);">
         <div id="card-sucesso-container" class="modal-content" style="max-width: 440px; border-radius: 16px; border: 2px solid #10b981; background: #ffffff; text-align: left; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35); overflow: hidden; padding: 0;">
@@ -3011,7 +3041,9 @@
         });
         let html5QrCode = null;
         let html5QrCodeBaixa = null;
+        let html5QrCodeRelatorio = null;
         let crudPendingAction = null;
+        let isRelatorioQrProcessing = false;
         let idsSelecaoRelatorio = [];
         
         let lastScannedBarcode = "";
@@ -3573,6 +3605,7 @@
 
             desativarCamera();
             desativarCameraBaixa();
+            desativarCameraRelatorioQR();
             document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
             document.querySelectorAll('.mobile-nav-item').forEach(i => i.classList.remove('active'));
@@ -10951,7 +10984,7 @@ function doGet(e) {
             }
         }
 
-        // CONTROLADORES DO CRUD EXCLUSÃO E EDICÃO AVANÇADA
+        // CONTROLADORES DO CRUD EXCLUSÃO E EDICÃO AVANÇADA (AUTORIZAÇÃO VIA QR CODE PORTARIA CENTRAL)
         function solicitarAcaoCrud(action) {
             if (idsSelecaoRelatorio === null || idsSelecaoRelatorio.length === 0) {
                 alert("Selecione pelo menos um registro na tabela para realizar esta ação.");
@@ -10961,16 +10994,170 @@ function doGet(e) {
                 alert("Por favor, selecione apenas UM registro por vez para editar. Para evitar alterações acidentais, a edição de múltiplos registros não é permitida.");
                 return;
             }
-            
-            const titulo = action === 'EDIT' ? "Editar Registro de Encomenda" : "Excluir Registro de Encomenda";
-            exigirAutenticacaoAdmin(() => {
+            abrirModalValidacaoQRRelatorio(action);
+        }
+
+        function abrirModalValidacaoQRRelatorio(action) {
+            crudPendingAction = action;
+            isRelatorioQrProcessing = false;
+
+            const alerta = document.getElementById('relatorio-qr-alerta');
+            if (alerta) {
+                const acaoTexto = action === 'EDIT' ? 'editar o registro' : 'excluir o(s) registro(s)';
+                const tituloAcao = action === 'EDIT' ? '✏️ AUTORIZAR EDIÇÃO' : '🗑️ AUTORIZAR EXCLUSÃO';
+                alerta.innerHTML = `
+                    <div style="font-weight: bold; font-size: 0.95rem; margin-bottom: 4px;">🏢 ${tituloAcao} - PORTARIA CENTRAL</div>
+                    <div style="font-size: 0.84rem;">Para ${acaoTexto} na tela de relatório, escaneie o <strong>QR Code da Portaria Central</strong> já cadastrado nos crachás.</div>
+                `;
+            }
+
+            const erroEl = document.getElementById('relatorio-qr-erro');
+            if (erroEl) {
+                erroEl.style.display = 'none';
+                erroEl.innerText = '';
+            }
+
+            const modal = document.getElementById('modal-qrcode-relatorio');
+            if (modal) modal.style.display = 'block';
+
+            ativarCameraRelatorioQR();
+        }
+
+        function fecharModalValidacaoQRRelatorio() {
+            crudPendingAction = null;
+            isRelatorioQrProcessing = false;
+            const modal = document.getElementById('modal-qrcode-relatorio');
+            if (modal) modal.style.display = 'none';
+            desativarCameraRelatorioQR();
+        }
+
+        function ativarCameraRelatorioQR() {
+            if (typeof AndroidScanner !== 'undefined') {
+                const subTarget = 'relatorio:' + (crudPendingAction || 'EDIT');
+                AndroidScanner.startScanner(subTarget);
+                return;
+            }
+            if (typeof CameraPermissionLauncher !== 'undefined') {
+                if (!CameraPermissionLauncher.hasPermission()) {
+                    CameraPermissionLauncher.requestPermission();
+                    alert("A permissão de câmera no Android é necessária para ler o QR Code da Portaria Central.");
+                    return;
+                }
+            }
+            if (!html5QrCodeRelatorio) html5QrCodeRelatorio = new Html5Qrcode("camera-preview-relatorio");
+            const laser = document.getElementById('laser-relatorio');
+            if (laser) laser.style.display = 'block';
+
+            const configRel = {
+                fps: 25,
+                qrbox: { width: 260, height: 260 },
+                formatsToSupport: (typeof Html5QrcodeSupportedFormats !== 'undefined') ? [
+                    Html5QrcodeSupportedFormats.QR_CODE
+                ] : undefined
+            };
+
+            if (html5QrCodeRelatorio.isScanning) return;
+            html5QrCodeRelatorio.start({ facingMode: "environment" }, configRel, (text) => {
+                processarValidacaoQRRelatorio(text);
+            }, () => {}).catch((err) => {
+                console.error("Camera Relatorio QR start failed:", err);
+                if (laser) laser.style.display = 'none';
+            });
+        }
+
+        function desativarCameraRelatorioQR() {
+            const laser = document.getElementById('laser-relatorio');
+            if (laser) laser.style.display = 'none';
+            if (html5QrCodeRelatorio && html5QrCodeRelatorio.isScanning) {
+                html5QrCodeRelatorio.stop().catch(() => {});
+            }
+        }
+
+        function validarQrCodePortariaCentral(codigoLido) {
+            const raw = (codigoLido || "").trim();
+            if (!raw) return false;
+            const norm = (str) => (str || "").toString().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+            const upper = norm(raw);
+
+            if (upper.startsWith("PORTER:")) {
+                const parts = raw.slice(7).split("|");
+                const nome = norm(parts[0] || "");
+                const bloco = norm(parts[1] || "");
+                if (
+                    nome === "PORTARIA CENTRAL" ||
+                    nome.includes("PORTARIA CENTRAL") ||
+                    nome === "CENTRAL" ||
+                    bloco === "CENTRAL" ||
+                    bloco === "PORTARIA CENTRAL" ||
+                    bloco === "TODOS" ||
+                    bloco === "TODOS OS BLOCOS" ||
+                    bloco === "GERAL" ||
+                    bloco === "MESTRE"
+                ) {
+                    return true;
+                }
+                return false;
+            }
+
+            if (
+                upper === "PORTARIA_CENTRAL" ||
+                upper === "PORTARIA CENTRAL" ||
+                upper === "PORTARIA_GERAL" ||
+                upper === "PORTARIA GERAL"
+            ) {
+                return true;
+            }
+
+            if (db && db.qrcodes && typeof db.qrcodes === 'object') {
+                for (const key in db.qrcodes) {
+                    const keyNorm = norm(key);
+                    if (
+                        keyNorm === "PORTARIA CENTRAL" ||
+                        keyNorm === "PORTARIA_CENTRAL" ||
+                        keyNorm === "CENTRAL" ||
+                        keyNorm === "PORTARIA GERAL"
+                    ) {
+                        const tokenNorm = norm(db.qrcodes[key]);
+                        if (tokenNorm && upper === tokenNorm) {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        function processarValidacaoQRRelatorio(codigoLido) {
+            const raw = (codigoLido || "").trim();
+            if (!raw || isRelatorioQrProcessing || !crudPendingAction) return;
+            isRelatorioQrProcessing = true;
+
+            emitirBip();
+
+            if (validarQrCodePortariaCentral(raw)) {
+                const action = crudPendingAction;
+                fecharModalValidacaoQRRelatorio();
                 if (action === 'DELETE') {
                     confirmarExclusaoCrud();
                 } else if (action === 'EDIT') {
                     fecharModalTimeline();
                     abrirEdicaoCrud();
                 }
-            }, titulo, true);
+            } else {
+                const erroEl = document.getElementById('relatorio-qr-erro');
+                if (erroEl) {
+                    erroEl.innerText = "❌ QR Code inválido! Escaneie exclusivamente o QR Code da PORTARIA CENTRAL.";
+                    erroEl.style.display = 'block';
+                }
+                alert("QR Code inválido!\n\nPara editar ou excluir registros na tela de relatório, escaneie o QR Code da PORTARIA CENTRAL cadastrado nos crachás.");
+                isRelatorioQrProcessing = false;
+                if (typeof AndroidScanner !== 'undefined' && crudPendingAction) {
+                    setTimeout(() => {
+                        if (crudPendingAction) ativarCameraRelatorioQR();
+                    }, 150);
+                }
+            }
         }
 
         function fecharModalAuthCrud() {
